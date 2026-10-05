@@ -1,5 +1,8 @@
 import brandConfig from '../brand/active.json';
 import * as Periods from '../core/periods.js';
+import * as Insights from '../core/insights.js';
+import * as Zones from '../core/zones.js';
+import { buildDemoHistory } from './demo-history.js';
 const BRAND = brandConfig.name;
 
 var S = {
@@ -40,58 +43,7 @@ var LOCS = [
 ];
 
 
-/* ====== DEMO HISTORY ======
-   Two months of plausible sessions so the week and month comparisons both have
-   something to show. Real sessions are appended by stopSession() in the same
-   shape, with a real timestamp. */
-function seedHistory(now) {
-  var APPS = ['ParkMobile', 'EasyPark', 'JustPark'];
-  var ZONES = [
-    ['Zone A - Lijnbaan', 'Lijnbaan 10'],
-    ['Zone B - Coolsingel', 'Coolsingel 42'],
-    ['Zone C - Beurstraverse', 'Beurstraverse 15'],
-    ['Zone D - Weena', 'Weena 70']
-  ];
-  var out = [];
-  // Deterministic pseudo-random, so the demo looks the same on every launch.
-  var n = 7;
-  function rnd() { n = (n * 1103515245 + 12345) % 2147483648; return n / 2147483648; }
 
-  for (var back = 0; back < 60; back++) {
-    var d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - back);
-    var perDay = rnd() < 0.45 ? 0 : (rnd() < 0.75 ? 1 : 2);
-    for (var k = 0; k < perDay; k++) {
-      var zone = ZONES[Math.floor(rnd() * ZONES.length)];
-      var mins = 15 + Math.floor(rnd() * 150);
-      var rate = 1.8 + rnd() * 1.4;
-      var ts = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 8 + Math.floor(rnd() * 10), Math.floor(rnd() * 60));
-      out.push({
-        app: APPS[Math.floor(rnd() * APPS.length)],
-        zone: zone[0],
-        loc: zone[1],
-        ts: ts.getTime(),
-        date: fmtWhen(ts),
-        cost: Math.round(mins / 60 * rate * 100) / 100,
-        duration: fmtTime(mins * 60),
-        autoStopped: rnd() < 0.68,
-        promptedStop: rnd() < 0.75
-      });
-    }
-  }
-  return out.sort(function(a, b) { return b.ts - a.ts; });
-}
-
-function fmtWhen(d) {
-  var today = new Date();
-  var days = Math.round((new Date(today.getFullYear(), today.getMonth(), today.getDate()) - new Date(d.getFullYear(), d.getMonth(), d.getDate())) / 86400000);
-  var time = pad(d.getHours()) + ':' + pad(d.getMinutes());
-  if (days === 0) return 'Today, ' + time;
-  if (days === 1) return 'Yesterday, ' + time;
-  if (days < 7) return ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()] + ', ' + time;
-  return d.getDate() + ' ' + ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()] + ', ' + time;
-}
-
-S.history = seedHistory(new Date());
 
 function loc() { return LOCS[S.locationIdx]; }
 function cost() { return (S.sessionSeconds / 3600) * S.sessionRate; }
@@ -694,6 +646,7 @@ function renderHistory() {
   }
 
   el.innerHTML = h;
+  if (S.historyView === 'insights') refreshCheaperZone();
 }
 
 function renderInsights() {
@@ -770,83 +723,124 @@ function renderInsights() {
   h += '</div>';
   h += '</div>';
 
-  // ── Prompt response ───────────────────────────────────────────────────────
-  // Deliberately not a euro figure. The app only prompts — it never stops a
-  // session itself — so any "saved" amount would be the cost of a stop that
-  // never happened, and nothing here knows when the driver would otherwise
-  // have noticed. These are the two things the app does know.
+  // ── Prompts acted on ──────────────────────────────────────────────────────
+  // Two separate questions. Ignoring a start prompt costs nothing; ignoring a
+  // stop prompt costs money. One blended number would hide that.
   var curSessions = S.history.filter(function (s) { return Periods.inRange(s, ranges.current); });
   var prevSessions = S.history.filter(function (s) { return Periods.inRange(s, ranges.previous); });
-  var answered = function (list) { return list.filter(function (s) { return s.promptedStop && s.autoStopped; }).length; };
-  var prompted = function (list) { return list.filter(function (s) { return s.promptedStop; }).length; };
+  var pCur = Insights.promptStats(curSessions);
+  var pPrev = Insights.promptStats(prevSessions);
 
-  var curAnswered = answered(curSessions);
-  var curPrompted = prompted(curSessions);
-  var prevAnswered = answered(prevSessions);
-  var curRate = curPrompted ? Math.round(curAnswered / curPrompted * 100) : null;
+  function promptRow(title, cur, prev) {
+    var r = '';
+    r += '<div style="display:flex;align-items:center;justify-content:space-between;padding:11px 0;border-bottom:1px solid var(--border);">';
+    r += '<div style="min-width:0;"><div style="font-size:13px;font-weight:600;color:var(--text);">' + title + '</div>';
+    r += '<div style="font-size:11px;color:var(--muted);">' + (cur.prompts ? cur.acted + ' of ' + cur.prompts + ' prompts' : 'no prompts yet') + '</div></div>';
+    r += '<div style="text-align:right;flex-shrink:0;">';
+    r += '<div style="font-size:22px;font-weight:800;font-family:var(--mono);color:var(--navy);" class="dark-accent">' + (cur.pct === null ? '—' : cur.pct + '%') + '</div>';
+    if (prev.pct !== null && cur.pct !== null) {
+      var d = cur.pct - prev.pct;
+      var col = d >= 0 ? '#2d9e5a' : '#d63031';
+      r += '<div style="font-size:10px;color:' + (d === 0 ? 'var(--muted)' : col) + ';">' + (d > 0 ? '+' : '') + d + ' pts</div>';
+    } else {
+      r += '<div style="font-size:10px;color:var(--muted);">—</div>';
+    }
+    r += '</div></div>';
+    return r;
+  }
 
-  h += '<div class="section-label">Prompts you acted on</div>';
+  h += '<div class="section-label">Prompts acted on</div>';
+  h += '<div class="card" style="padding:4px 16px;">';
+  h += promptRow('Start prompts acted on', pCur.start, pPrev.start);
+  h += promptRow('Stop prompts acted on', pCur.stop, pPrev.stop);
+  h += '<div style="padding:11px 0;font-size:11px;color:var(--muted);line-height:1.5;">Measured against the same days ' + ranges.label + ' before.</div>';
+  h += '</div>';
+
+  // ── How long sessions ran on ──────────────────────────────────────────────
+  // Minutes, not euros: this is time the app measured, not money it guessed.
+  var lag = Insights.stopLag(curSessions);
+  h += '<div class="section-label">After you drove off</div>';
   h += '<div class="card">';
-  h += '<div style="display:flex;gap:8px;">';
-  h += '<div class="ins-stat">';
-  h += '<div style="font-size:11px;color:var(--muted);margin-bottom:4px;">' + ranges.currentLabel + '</div>';
-  h += '<div class="ins-big">' + curAnswered + '</div>';
-  h += '<div style="font-size:11px;color:var(--muted);margin-top:3px;">of ' + curPrompted + ' prompts</div>';
-  h += '</div>';
-  h += '<div class="ins-stat">';
-  h += '<div style="font-size:11px;color:var(--muted);margin-bottom:4px;">' + ranges.previousLabel + '</div>';
-  h += '<div class="ins-big" style="color:var(--muted);">' + prevAnswered + '</div>';
-  h += '<div style="font-size:11px;color:var(--muted);margin-top:3px;">of ' + prompted(prevSessions) + ' prompts</div>';
-  h += '</div>';
-  h += '</div>';
-  h += '<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);font-size:11px;color:var(--muted);line-height:1.5;">';
-  if (curRate === null) {
-    h += 'No stop prompts this ' + ranges.label + ' yet.';
+  if (!lag.count) {
+    h += '<div style="font-size:13px;color:var(--muted);">No sessions ended by a stop prompt this ' + ranges.label + ' yet.</div>';
   } else {
-    h += 'You stopped ' + curRate + '% of the sessions we flagged. Each one is parking time you would otherwise still be paying for — we cannot say how much, because we do not know when you would have noticed.';
+    h += '<div style="font-size:13px;color:var(--text);line-height:1.6;">';
+    h += 'You stopped <strong>' + lag.count + '</strong> session' + (lag.count === 1 ? '' : 's') + ' an average of ';
+    h += '<strong style="font-family:var(--mono);">' + lag.median + ' min</strong> after driving away.';
+    h += '</div>';
+    h += '<div style="margin-top:8px;font-size:11px;color:var(--muted);line-height:1.5;">';
+    h += lag.total + ' minutes of parking in total. How much of that you would have paid without the prompt depends on when you would have noticed — which we cannot know, so we do not put a figure on it.';
+    h += '</div>';
   }
   h += '</div>';
-  h += '</div>';
 
-  // ── Most-used zones ───────────────────────────────────────────────────────
-  h += '<div class="section-label">Top Zones</div>';
+  // ── Zones, and the cheaper one next door ──────────────────────────────────
+  var usage = Insights.zoneUsage(S.history);
+  h += '<div class="section-label">Where you park</div>';
   h += '<div class="card" style="padding:14px 16px;">';
-  sortedZones.slice(0,4).forEach(function(zone, i) {
-    var count = zoneCounts[zone];
-    var pct = Math.round((count/maxZone)*100);
-    var spend = S.history.filter(function(s){ return s.zone.split(' - ')[0]===zone; }).reduce(function(a,s){ return a+s.cost; },0);
-    h += '<div class="zone-bar">';
-    h += '<div style="width:20px;height:20px;border-radius:5px;background:'+(i===0?'var(--navy)':'var(--border)')+';display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:'+(i===0?'var(--yellow)':'var(--muted)')+';flex-shrink:0;">'+(i+1)+'</div>';
-    h += '<div style="flex:1;">';
-    h += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">';
-    h += '<div style="font-size:12px;font-weight:600;color:var(--text);">'+zone+'</div>';
-    h += '<div style="font-size:11px;color:var(--muted);">'+count+' visit'+(count!==1?'s':'')+' &middot; '+euro(spend)+'</div>';
-    h += '</div>';
-    h += '<div style="background:var(--border);border-radius:5px;height:4px;">';
-    h += '<div class="zone-fill" style="width:'+pct+'%;"></div>';
-    h += '</div>';
-    h += '</div></div>';
-  });
+  if (!usage.length) {
+    h += '<div style="font-size:13px;color:var(--muted);">No sessions yet.</div>';
+  } else {
+    var maxVisits = usage[0].visits;
+    usage.slice(0, 4).forEach(function (z, i) {
+      var pct = Math.round((z.visits / maxVisits) * 100);
+      h += '<div class="zone-bar">';
+      h += '<div style="width:20px;height:20px;border-radius:5px;background:' + (i === 0 ? 'var(--navy)' : 'var(--border)') + ';display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:' + (i === 0 ? 'var(--yellow)' : 'var(--muted)') + ';flex-shrink:0;">' + (i + 1) + '</div>';
+      h += '<div style="flex:1;min-width:0;">';
+      h += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;gap:8px;">';
+      h += '<span style="font-size:12px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + z.label + '</span>';
+      h += '<span style="font-size:11px;color:var(--muted);flex-shrink:0;">' + z.visits + ' visits · ' + euro(z.spend) + '</span>';
+      h += '</div>';
+      h += '<div style="background:var(--border);border-radius:5px;height:4px;">';
+      h += '<div class="zone-fill" style="width:' + pct + '%;"></div>';
+      h += '</div>';
+      h += '</div></div>';
+    });
+  }
   h += '</div>';
 
-  // ── Auto-stop rate ─────────────────────────────────────────────────────────
-  h += '<div class="section-label">Efficiency</div>';
-  h += '<div class="card">';
-  h += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">';
-  h += '<div><div style="font-size:13px;font-weight:600;color:var(--text);">Auto-stop rate</div>';
-  h += '<div style="font-size:11px;color:var(--muted);">Sessions stopped automatically</div></div>';
-  h += '<div style="font-size:26px;font-weight:800;font-family:var(--mono);color:var(--navy);" class="dark-accent">'+autoRate+'%</div>';
-  h += '</div>';
-  h += '<div style="background:var(--border);border-radius:6px;height:6px;">';
-  h += '<div style="height:6px;border-radius:6px;background:var(--navy);width:'+autoRate+'%;transition:width 0.6s;"></div>';
-  h += '</div>';
-  h += '<div style="display:flex;justify-content:space-between;margin-top:5px;">';
-  h += '<div style="font-size:10px;color:var(--muted);">'+autoCount+' auto-stopped</div>';
-  h += '<div style="font-size:10px;color:var(--muted);">'+(S.history.length-autoCount)+' manual</div>';
-  h += '</div>';
-  h += '</div>';
+  // The suggestion only appears when there really is a cheaper zone bordering
+  // the one you use most. Rendered after the fact because the zone file loads
+  // asynchronously; see refreshCheaperZone().
+  h += '<div id="cheaper-zone"></div>';
 
   return h;
+}
+
+// Fills in the "cheaper next door" card once the zone polygons are available.
+// Silent when there is no cheaper neighbour — sending someone on a walk for a
+// saving that does not exist would be worse than saying nothing.
+function refreshCheaperZone() {
+  var slot = document.getElementById('cheaper-zone');
+  if (!slot) return;
+
+  var usage = Insights.zoneUsage(S.history);
+  if (!usage.length) return;
+
+  Zones.loadZones().then(function (data) {
+    var alt = Insights.cheaperNeighbour(usage[0], data);
+    var el = document.getElementById('cheaper-zone');
+    if (!el || !alt) return;
+
+    var h = '';
+    h += '<div class="section-label">A cheaper zone next door</div>';
+    h += '<div class="card" style="border:1.5px solid rgba(45,158,90,0.25);">';
+    h += '<div style="font-size:13px;color:var(--text);line-height:1.6;">';
+    h += 'You park most in <strong>' + usage[0].label + '</strong> at <span style="font-family:var(--mono);">' + euro(alt.hereRate) + '</span>/h. ';
+    h += '<strong>' + alt.label + '</strong> borders it ' + (alt.metres === 0 ? 'directly' : alt.metres + ' m away') + ' at <span style="font-family:var(--mono);">' + euro(alt.rate) + '</span>/h.';
+    h += '</div>';
+    h += '<div style="display:flex;gap:8px;margin-top:12px;">';
+    h += '<div class="ins-stat"><div style="font-size:11px;color:var(--muted);margin-bottom:4px;">You paid</div>';
+    h += '<div class="ins-big">' + euro(alt.actuallyCost) + '</div></div>';
+    h += '<div class="ins-stat"><div style="font-size:11px;color:var(--muted);margin-bottom:4px;">Next door</div>';
+    h += '<div class="ins-big" style="color:#2d9e5a;">' + euro(alt.wouldHaveCost) + '</div></div>';
+    h += '</div>';
+    h += '<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);font-size:11px;color:var(--muted);line-height:1.5;">';
+    h += 'The same hours next door would have cost ' + euro(alt.difference) + ' less. An estimate: it assumes you would have parked the same hours, and the two zones can keep different paid times.';
+    h += '</div>';
+    h += '</div>';
+    el.innerHTML = h;
+  });
 }
 
 function renderSessions() {
@@ -1366,5 +1360,5 @@ function finishOB() {
 }
 
 /* ====== exported to window: the markup uses inline on* handlers ====== */
-Object.assign(window, { S: S, LOCS: LOCS, seedHistory, fmtWhen, loc, cost, fmtTime, fmtFull, pad, euro, allApps, toggleDark, toggleDev, showTab, startTick, updateDevState, updateDisplay, showBanner, dismissBanner, isExempt, startSession, stopSession, setSpeed, updateDwellStatus, runQuickTest, updateZones, showLock, hideLock, lockStopTap, lockStopCancel, renderLockButtons, updateLockClock, openMap, closeMap, changeLocation, openSheet, closeSheet, confirmSheet, addCustomApp, addExemption, toggleExemption, removeExemption, renderSessionCard, renderHome, renderDevTools, resetDevState, renderApps, setPeriod, setHV, renderHistory, renderInsights, renderSessions, renderSettings, showOnboarding, renderOB, showAddCustomAppInOB, addCustomAppOB, tgHome, tgWork, addExFromOB, finishOB });
+Object.assign(window, { S: S, LOCS: LOCS, loc, cost, fmtTime, fmtFull, pad, euro, allApps, toggleDark, toggleDev, showTab, startTick, updateDevState, updateDisplay, showBanner, dismissBanner, isExempt, startSession, stopSession, setSpeed, updateDwellStatus, runQuickTest, updateZones, showLock, hideLock, lockStopTap, lockStopCancel, renderLockButtons, updateLockClock, openMap, closeMap, changeLocation, openSheet, closeSheet, confirmSheet, addCustomApp, addExemption, toggleExemption, removeExemption, renderSessionCard, renderHome, renderDevTools, resetDevState, renderApps, setPeriod, setHV, renderHistory, renderInsights, refreshCheaperZone, renderSessions, renderSettings, showOnboarding, renderOB, showAddCustomAppInOB, addCustomAppOB, tgHome, tgWork, addExFromOB, finishOB });
 export { S, LOCS, renderHome, renderSettings, showBanner, dismissBanner, startSession, stopSession, updateDwellStatus, showOnboarding };

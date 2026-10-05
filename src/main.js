@@ -5,6 +5,7 @@ import './ui/styles.css';
 import brand from './brand/active.json';
 import { S, showOnboarding } from './ui/app.js';
 import { startTracking } from './ui/bridge.js';
+import { buildDemoHistory } from './ui/demo-history.js';
 
 applyBrand(brand);
 
@@ -41,3 +42,12 @@ function applyBrand(b) {
   document.documentElement.lang = b.lang;
   document.querySelectorAll('[data-brand-name]').forEach(el => { el.textContent = b.name; });
 }
+
+// Demo sessions are built from the real zone file, so the history insights
+// compute exactly as they will for real ones.
+buildDemoHistory().then(function (sessions) {
+  if (!sessions.length) return;
+  S.history = sessions;
+  if (typeof window.renderHistory === 'function') window.renderHistory();
+  if (typeof window.renderHome === 'function') window.renderHome();
+});
