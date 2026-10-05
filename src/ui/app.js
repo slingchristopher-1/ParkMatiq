@@ -750,6 +750,14 @@ function renderInsights() {
       h += '</div>';
       h += '</div></div>';
     });
+
+    // Every zone, not just the four shown, so the total matches the Spend card.
+    var allVisits = usage.reduce(function (a, z) { return a + z.visits; }, 0);
+    var allSpend = usage.reduce(function (a, z) { return a + z.spend; }, 0);
+    h += '<div style="margin-top:4px;padding-top:11px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">';
+    h += '<span style="font-size:12px;color:var(--muted);">' + usage.length + ' zone' + (usage.length === 1 ? '' : 's') + ' · ' + allVisits + ' visit' + (allVisits === 1 ? '' : 's') + '</span>';
+    h += '<span style="font-size:17px;font-weight:800;font-family:var(--mono);color:var(--text);">' + euro(allSpend) + '</span>';
+    h += '</div>';
   }
   h += '</div>';
 
@@ -817,6 +825,10 @@ function refreshCheaperZone() {
     var h = '';
     h += '<div class="section-label">Where you could have parked</div>';
     h += '<div class="card" style="padding:4px 16px;">';
+    h += '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0 8px;border-bottom:1px solid var(--border);">';
+    h += '<span style="font-size:10px;font-weight:700;letter-spacing:0.8px;text-transform:uppercase;color:var(--muted);">Zone → cheaper neighbour</span>';
+    h += '<span style="font-size:10px;font-weight:700;letter-spacing:0.8px;text-transform:uppercase;color:var(--muted);">You’d have saved</span>';
+    h += '</div>';
 
     alts.forEach(function (row, i) {
       var last = i === alts.length - 1;
@@ -834,7 +846,7 @@ function refreshCheaperZone() {
     });
 
     h += '<div style="padding:11px 0;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">';
-    h += '<span style="font-size:12px;color:var(--muted);">Estimate — same hours, next door</span>';
+    h += '<span style="font-size:12px;color:var(--muted);">Total · estimate on the same hours</span>';
     h += '<span style="font-size:17px;font-weight:800;font-family:var(--mono);color:#2d9e5a;">' + euro(total) + '</span>';
     h += '</div>';
     h += '</div>';
