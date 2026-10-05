@@ -113,3 +113,19 @@ function rateOf(feature, data, when) {
   // on the zone's own top rate instead, which is what a driver is choosing on.
   return feature.properties.maxEurPerHour ?? null;
 }
+
+// The same comparison for each of the driver's most-used zones. Zones with no
+// cheaper neighbour are left out rather than padded with an empty row.
+export function cheaperAlternatives(usageList, data, opts = {}) {
+  const limit = opts.limit ?? 4;
+  const out = [];
+  for (const usage of usageList.slice(0, limit)) {
+    const alt = cheaperNeighbour(usage, data, opts);
+    if (alt) out.push({ usage, alt });
+  }
+  return out;
+}
+
+export function totalDifference(alternatives) {
+  return Math.round(alternatives.reduce((a, x) => a + x.alt.difference, 0) * 100) / 100;
+}

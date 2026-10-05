@@ -723,59 +723,13 @@ function renderInsights() {
   h += '</div>';
   h += '</div>';
 
-  // ── Prompts acted on ──────────────────────────────────────────────────────
-  // Two separate questions. Ignoring a start prompt costs nothing; ignoring a
-  // stop prompt costs money. One blended number would hide that.
+  // Order: what it cost, where that was, what it could have cost — then how the
+  // app itself did.
   var curSessions = S.history.filter(function (s) { return Periods.inRange(s, ranges.current); });
   var prevSessions = S.history.filter(function (s) { return Periods.inRange(s, ranges.previous); });
-  var pCur = Insights.promptStats(curSessions);
-  var pPrev = Insights.promptStats(prevSessions);
 
-  function promptRow(title, cur, prev) {
-    var r = '';
-    r += '<div style="display:flex;align-items:center;justify-content:space-between;padding:11px 0;border-bottom:1px solid var(--border);">';
-    r += '<div style="min-width:0;"><div style="font-size:13px;font-weight:600;color:var(--text);">' + title + '</div>';
-    r += '<div style="font-size:11px;color:var(--muted);">' + (cur.prompts ? cur.acted + ' of ' + cur.prompts + ' prompts' : 'no prompts yet') + '</div></div>';
-    r += '<div style="text-align:right;flex-shrink:0;">';
-    r += '<div style="font-size:22px;font-weight:800;font-family:var(--mono);color:var(--navy);" class="dark-accent">' + (cur.pct === null ? '—' : cur.pct + '%') + '</div>';
-    if (prev.pct !== null && cur.pct !== null) {
-      var d = cur.pct - prev.pct;
-      var col = d >= 0 ? '#2d9e5a' : '#d63031';
-      r += '<div style="font-size:10px;color:' + (d === 0 ? 'var(--muted)' : col) + ';">' + (d > 0 ? '+' : '') + d + ' pts</div>';
-    } else {
-      r += '<div style="font-size:10px;color:var(--muted);">—</div>';
-    }
-    r += '</div></div>';
-    return r;
-  }
-
-  h += '<div class="section-label">Prompts acted on</div>';
-  h += '<div class="card" style="padding:4px 16px;">';
-  h += promptRow('Start prompts acted on', pCur.start, pPrev.start);
-  h += promptRow('Stop prompts acted on', pCur.stop, pPrev.stop);
-  h += '<div style="padding:11px 0;font-size:11px;color:var(--muted);line-height:1.5;">Measured against the same days ' + ranges.label + ' before.</div>';
-  h += '</div>';
-
-  // ── How long sessions ran on ──────────────────────────────────────────────
-  // Minutes, not euros: this is time the app measured, not money it guessed.
-  var lag = Insights.stopLag(curSessions);
-  h += '<div class="section-label">After you drove off</div>';
-  h += '<div class="card">';
-  if (!lag.count) {
-    h += '<div style="font-size:13px;color:var(--muted);">No sessions ended by a stop prompt this ' + ranges.label + ' yet.</div>';
-  } else {
-    h += '<div style="font-size:13px;color:var(--text);line-height:1.6;">';
-    h += 'You stopped <strong>' + lag.count + '</strong> session' + (lag.count === 1 ? '' : 's') + ' an average of ';
-    h += '<strong style="font-family:var(--mono);">' + lag.median + ' min</strong> after driving away.';
-    h += '</div>';
-    h += '<div style="margin-top:8px;font-size:11px;color:var(--muted);line-height:1.5;">';
-    h += lag.total + ' minutes of parking in total. How much of that you would have paid without the prompt depends on when you would have noticed — which we cannot know, so we do not put a figure on it.';
-    h += '</div>';
-  }
-  h += '</div>';
-
-  // ── Zones, and the cheaper one next door ──────────────────────────────────
-  var usage = Insights.zoneUsage(S.history);
+  // ── Where you park ────────────────────────────────────────────────────────
+  var usage = Insights.zoneUsage(curSessions);
   h += '<div class="section-label">Where you park</div>';
   h += '<div class="card" style="padding:14px 16px;">';
   if (!usage.length) {
@@ -789,7 +743,7 @@ function renderInsights() {
       h += '<div style="flex:1;min-width:0;">';
       h += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;gap:8px;">';
       h += '<span style="font-size:12px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + z.label + '</span>';
-      h += '<span style="font-size:11px;color:var(--muted);flex-shrink:0;">' + z.visits + ' visits · ' + euro(z.spend) + '</span>';
+      h += '<span style="font-size:11px;color:var(--muted);flex-shrink:0;">' + z.visits + ' visit' + (z.visits === 1 ? '' : 's') + ' · ' + euro(z.spend) + '</span>';
       h += '</div>';
       h += '<div style="background:var(--border);border-radius:5px;height:4px;">';
       h += '<div class="zone-fill" style="width:' + pct + '%;"></div>';
@@ -799,44 +753,89 @@ function renderInsights() {
   }
   h += '</div>';
 
-  // The suggestion only appears when there really is a cheaper zone bordering
-  // the one you use most. Rendered after the fact because the zone file loads
-  // asynchronously; see refreshCheaperZone().
-  h += '<div id="cheaper-zone"></div>';
+  // Filled in once the zone polygons load; empty when nothing cheaper borders.
+  h += '<div id="cheaper-zones"></div>';
+
+  // ── Prompts acted on ──────────────────────────────────────────────────────
+  // Start and stop are separate questions: ignoring a start prompt costs
+  // nothing, ignoring a stop prompt costs money.
+  var pCur = Insights.promptStats(curSessions);
+  var pPrev = Insights.promptStats(prevSessions);
+
+  function promptRow(title, cur, prev, last) {
+    var r = '';
+    r += '<div style="display:flex;align-items:center;justify-content:space-between;padding:11px 0;' + (last ? '' : 'border-bottom:1px solid var(--border);') + '">';
+    r += '<div style="min-width:0;"><div style="font-size:13px;font-weight:600;color:var(--text);">' + title + '</div>';
+    r += '<div style="font-size:11px;color:var(--muted);">' + (cur.prompts ? cur.acted + ' of ' + cur.prompts : 'none yet') + '</div></div>';
+    r += '<div style="text-align:right;flex-shrink:0;">';
+    r += '<div style="font-size:22px;font-weight:800;font-family:var(--mono);color:var(--navy);" class="dark-accent">' + (cur.pct === null ? '—' : cur.pct + '%') + '</div>';
+    if (prev.pct !== null && cur.pct !== null) {
+      var d = cur.pct - prev.pct;
+      r += '<div style="font-size:10px;color:' + (d === 0 ? 'var(--muted)' : (d > 0 ? '#2d9e5a' : '#d63031')) + ';">' + (d > 0 ? '+' : '') + d + ' pts</div>';
+    }
+    r += '</div></div>';
+    return r;
+  }
+
+  h += '<div class="section-label">Prompts acted on</div>';
+  h += '<div class="card" style="padding:4px 16px;">';
+  h += promptRow('Start prompts', pCur.start, pPrev.start, false);
+  h += promptRow('Stop prompts', pCur.stop, pPrev.stop, true);
+  h += '</div>';
+
+  // ── Stop lag ──────────────────────────────────────────────────────────────
+  var lag = Insights.stopLag(curSessions);
+  if (lag.count) {
+    h += '<div class="section-label">After you drove off</div>';
+    h += '<div class="card">';
+    h += '<div style="font-size:13px;color:var(--text);line-height:1.6;">';
+    h += 'You stopped <strong>' + lag.count + '</strong> session' + (lag.count === 1 ? '' : 's') + ' an average of <strong style="font-family:var(--mono);">' + lag.median + ' min</strong> after driving away.';
+    h += '</div>';
+    h += '<div style="margin-top:6px;font-size:11px;color:var(--muted);">Not priced — we cannot know when you would have noticed.</div>';
+    h += '</div>';
+  }
 
   return h;
 }
 
-// Fills in the "cheaper next door" card once the zone polygons are available.
-// Silent when there is no cheaper neighbour — sending someone on a walk for a
-// saving that does not exist would be worse than saying nothing.
+// "Where you could have parked": the cheapest bordering zone for each of the
+// most-used ones. Runs after render because the zone polygons load async; zones
+// with nothing cheaper beside them are left out entirely.
 function refreshCheaperZone() {
-  var slot = document.getElementById('cheaper-zone');
-  if (!slot) return;
-
-  var usage = Insights.zoneUsage(S.history);
-  if (!usage.length) return;
+  if (!document.getElementById('cheaper-zones')) return;
 
   Zones.loadZones().then(function (data) {
-    var alt = Insights.cheaperNeighbour(usage[0], data);
-    var el = document.getElementById('cheaper-zone');
-    if (!el || !alt) return;
+    var el = document.getElementById('cheaper-zones');
+    if (!el || !data) return;
 
+    var ranges = Periods.periodRanges(S.insightsPeriod || 'week');
+    var scoped = S.history.filter(function (s) { return Periods.inRange(s, ranges.current); });
+    var alts = Insights.cheaperAlternatives(Insights.zoneUsage(scoped), data, { limit: 4 });
+    if (!alts.length) { el.innerHTML = ''; return; }
+
+    var total = Insights.totalDifference(alts);
     var h = '';
-    h += '<div class="section-label">A cheaper zone next door</div>';
-    h += '<div class="card" style="border:1.5px solid rgba(45,158,90,0.25);">';
-    h += '<div style="font-size:13px;color:var(--text);line-height:1.6;">';
-    h += 'You park most in <strong>' + usage[0].label + '</strong> at <span style="font-family:var(--mono);">' + euro(alt.hereRate) + '</span>/h. ';
-    h += '<strong>' + alt.label + '</strong> borders it ' + (alt.metres === 0 ? 'directly' : alt.metres + ' m away') + ' at <span style="font-family:var(--mono);">' + euro(alt.rate) + '</span>/h.';
-    h += '</div>';
-    h += '<div style="display:flex;gap:8px;margin-top:12px;">';
-    h += '<div class="ins-stat"><div style="font-size:11px;color:var(--muted);margin-bottom:4px;">You paid</div>';
-    h += '<div class="ins-big">' + euro(alt.actuallyCost) + '</div></div>';
-    h += '<div class="ins-stat"><div style="font-size:11px;color:var(--muted);margin-bottom:4px;">Next door</div>';
-    h += '<div class="ins-big" style="color:#2d9e5a;">' + euro(alt.wouldHaveCost) + '</div></div>';
-    h += '</div>';
-    h += '<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);font-size:11px;color:var(--muted);line-height:1.5;">';
-    h += 'The same hours next door would have cost ' + euro(alt.difference) + ' less. An estimate: it assumes you would have parked the same hours, and the two zones can keep different paid times.';
+    h += '<div class="section-label">Where you could have parked</div>';
+    h += '<div class="card" style="padding:4px 16px;">';
+
+    alts.forEach(function (row, i) {
+      var last = i === alts.length - 1;
+      h += '<div style="padding:11px 0;' + (last ? '' : 'border-bottom:1px solid var(--border);') + '">';
+      h += '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">';
+      h += '<div style="min-width:0;">';
+      h += '<div style="font-size:12.5px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + row.usage.label + ' → ' + row.alt.label + '</div>';
+      h += '<div style="font-size:11px;color:var(--muted);font-family:var(--mono);">' + euro(row.alt.hereRate) + '/h → ' + euro(row.alt.rate) + '/h · ' + (row.alt.metres === 0 ? 'adjacent' : row.alt.metres + ' m') + '</div>';
+      h += '</div>';
+      h += '<div style="text-align:right;flex-shrink:0;">';
+      h += '<div style="font-size:15px;font-weight:800;font-family:var(--mono);color:#2d9e5a;">' + euro(row.alt.difference) + '</div>';
+      h += '<div style="font-size:10px;color:var(--muted);">' + row.usage.visits + ' visit' + (row.usage.visits === 1 ? '' : 's') + '</div>';
+      h += '</div>';
+      h += '</div></div>';
+    });
+
+    h += '<div style="padding:11px 0;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">';
+    h += '<span style="font-size:12px;color:var(--muted);">Estimate — same hours, next door</span>';
+    h += '<span style="font-size:17px;font-weight:800;font-family:var(--mono);color:#2d9e5a;">' + euro(total) + '</span>';
     h += '</div>';
     h += '</div>';
     el.innerHTML = h;

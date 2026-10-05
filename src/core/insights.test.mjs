@@ -1,7 +1,7 @@
 // node --test src/core/insights.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { promptStats, stopLag, zoneUsage, cheaperNeighbour } from './insights.js';
+import { promptStats, stopLag, zoneUsage, cheaperNeighbour, cheaperAlternatives, totalDifference } from './insights.js';
 import { metresApart, neighboursOf } from './zones.js';
 
 // A square roughly 100 m on a side, at `lon`/`lat`, as a GeoJSON feature.
@@ -105,4 +105,15 @@ test('a zone with an unresolved tariff is never suggested', () => {
 test('no cheaper neighbour means no suggestion', () => {
   const usage = { areaid: 'B', areamanagerid: '1', spend: 4, minutes: 120 };
   assert.equal(cheaperNeighbour(usage, DATA, { when: WED }), null);
+});
+
+test('alternatives cover several zones and total up', () => {
+  const usage = [
+    { areaid: 'A', areamanagerid: '1', label: 'Lijnbaan', spend: 10, minutes: 120, visits: 5 },
+    { areaid: 'B', areamanagerid: '1', label: 'Coolsingel', spend: 4, minutes: 120, visits: 3 },
+  ];
+  const alts = cheaperAlternatives(usage, DATA, { when: WED });
+  assert.equal(alts.length, 1, 'Coolsingel has no cheaper neighbour, so it is left out');
+  assert.equal(alts[0].alt.label, 'Coolsingel');
+  assert.equal(totalDifference(alts), 6);
 });
