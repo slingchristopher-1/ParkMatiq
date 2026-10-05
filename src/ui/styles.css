@@ -165,3 +165,13 @@ input[type=range] { flex: 1; accent-color: var(--navy); height: 4px; }
 .app-connect-row.connected { border-color: rgba(0,45,114,0.4); background: rgba(0,45,114,0.05); }
 .dark .app-connect-row.connected { border-color: rgba(247,209,23,0.3); background: rgba(247,209,23,0.05); }
 .app-logo { width: 36px; height: 36px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 13px; flex-shrink: 0; }
+
+/* Week / month switch on the insights screen */
+.seg { display: flex; background: var(--field); border-radius: 9px; padding: 2px; gap: 2px; }
+.seg-opt {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.2px;
+  padding: 5px 11px; border-radius: 7px; cursor: pointer;
+  color: var(--muted); transition: background 0.18s, color 0.18s;
+}
+.seg-opt.act { background: var(--card); color: var(--navy); box-shadow: 0 1px 3px var(--shadow); }
+.dark .seg-opt.act { color: var(--yellow); }

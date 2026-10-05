@@ -1,4 +1,5 @@
 import brandConfig from '../brand/active.json';
+import * as Periods from '../core/periods.js';
 const BRAND = brandConfig.name;
 
 var S = {
@@ -7,7 +8,7 @@ var S = {
   budgetAlertShown: false, speed: 0, threshold: 20, delay: 5,
   driveMode: 'auto', stopMode: 'auto',
   countdown: false, countdownVal: 0, countdownTimer: null,
-  locationIdx: 0, savings: 4.30,
+  locationIdx: 0,
   budgetEnabled: false, budgetAmount: 5.0,
   permLocation: true, permMotion: true, permNotif: true,
   autoStartEnabled: true,
@@ -23,25 +24,12 @@ var S = {
   ],
   exemptPlaces: { home: false, work: false },
   obHomePC: '', obWorkPC: '',
-  history: [
-    { app:'ParkMobile', zone:'Zone A - Lijnbaan', date:'Today, 08:42', cost:1.80, duration:'54m 00s', autoStopped:true, loc:'Lijnbaan 10', week:'this', day:'Mon' },
-    { app:'EasyPark', zone:'Zone C - Beurstraverse', date:'Today, 14:10', cost:3.20, duration:'1h 36m', autoStopped:false, loc:'Beurstraverse 15', week:'this', day:'Mon' },
-    { app:'ParkMobile', zone:'Zone A - Lijnbaan', date:'Yesterday, 09:30', cost:0.60, duration:'18m 00s', autoStopped:true, loc:'Lijnbaan 10', week:'this', day:'Sun' },
-    { app:'JustPark', zone:'Zone B - Coolsingel', date:'Sat, 11:20', cost:2.40, duration:'1h 12m', autoStopped:true, loc:'Coolsingel 42', week:'this', day:'Sat' },
-    { app:'ParkMobile', zone:'Zone A - Lijnbaan', date:'Fri, 08:55', cost:1.60, duration:'48m 00s', autoStopped:true, loc:'Lijnbaan 10', week:'this', day:'Fri' },
-    { app:'EasyPark', zone:'Zone D - Weena', date:'Thu, 13:45', cost:4.10, duration:'2h 03m', autoStopped:false, loc:'Weena 70', week:'this', day:'Thu' },
-    { app:'ParkMobile', zone:'Zone A - Lijnbaan', date:'Wed, 09:10', cost:1.80, duration:'54m 00s', autoStopped:true, loc:'Lijnbaan 10', week:'this', day:'Wed' },
-    { app:'ParkMobile', zone:'Zone B - Coolsingel', date:'Last Mon, 08:50', cost:1.60, duration:'48m 00s', autoStopped:true, loc:'Coolsingel 42', week:'last', day:'Mon' },
-    { app:'EasyPark', zone:'Zone C - Beurstraverse', date:'Last Mon, 15:00', cost:2.80, duration:'1h 24m', autoStopped:false, loc:'Beurstraverse 15', week:'last', day:'Mon' },
-    { app:'ParkMobile', zone:'Zone A - Lijnbaan', date:'Last Sun, 10:20', cost:0.80, duration:'24m 00s', autoStopped:true, loc:'Lijnbaan 10', week:'last', day:'Sun' },
-    { app:'JustPark', zone:'Zone D - Weena', date:'Last Sat, 12:00', cost:3.50, duration:'1h 45m', autoStopped:true, loc:'Weena 70', week:'last', day:'Sat' },
-    { app:'ParkMobile', zone:'Zone A - Lijnbaan', date:'Last Fri, 08:40', cost:1.60, duration:'48m 00s', autoStopped:true, loc:'Lijnbaan 10', week:'last', day:'Fri' },
-    { app:'EasyPark', zone:'Zone B - Coolsingel', date:'Last Thu, 14:30', cost:2.10, duration:'1h 03m', autoStopped:false, loc:'Coolsingel 42', week:'last', day:'Thu' },
-    { app:'ParkMobile', zone:'Zone A - Lijnbaan', date:'Last Wed, 09:00', cost:1.80, duration:'54m 00s', autoStopped:true, loc:'Lijnbaan 10', week:'last', day:'Wed' }
-  ],
+  history: [],
+
   tickTimer: null, sheetApp: null, sheetAction: null, lockVisible: false, showDev: false,
   lockStopConfirm: false, lockStopTimer: null,
-  historyView: 'insights'
+  historyView: 'insights',
+  insightsPeriod: 'week'
 };
 
 var LOCS = [
@@ -50,6 +38,60 @@ var LOCS = [
   { addr:'Beurstraverse 15, Rotterdam', coords:'51.9197N 4.4826E', zone:'Zone C - Beurstraverse', postcode:'3011NE' },
   { addr:'Weena 70, Rotterdam', coords:'51.9248N 4.4726E', zone:'Zone D - Central Station', postcode:'3013AP' }
 ];
+
+
+/* ====== DEMO HISTORY ======
+   Two months of plausible sessions so the week and month comparisons both have
+   something to show. Real sessions are appended by stopSession() in the same
+   shape, with a real timestamp. */
+function seedHistory(now) {
+  var APPS = ['ParkMobile', 'EasyPark', 'JustPark'];
+  var ZONES = [
+    ['Zone A - Lijnbaan', 'Lijnbaan 10'],
+    ['Zone B - Coolsingel', 'Coolsingel 42'],
+    ['Zone C - Beurstraverse', 'Beurstraverse 15'],
+    ['Zone D - Weena', 'Weena 70']
+  ];
+  var out = [];
+  // Deterministic pseudo-random, so the demo looks the same on every launch.
+  var n = 7;
+  function rnd() { n = (n * 1103515245 + 12345) % 2147483648; return n / 2147483648; }
+
+  for (var back = 0; back < 60; back++) {
+    var d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - back);
+    var perDay = rnd() < 0.45 ? 0 : (rnd() < 0.75 ? 1 : 2);
+    for (var k = 0; k < perDay; k++) {
+      var zone = ZONES[Math.floor(rnd() * ZONES.length)];
+      var mins = 15 + Math.floor(rnd() * 150);
+      var rate = 1.8 + rnd() * 1.4;
+      var ts = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 8 + Math.floor(rnd() * 10), Math.floor(rnd() * 60));
+      out.push({
+        app: APPS[Math.floor(rnd() * APPS.length)],
+        zone: zone[0],
+        loc: zone[1],
+        ts: ts.getTime(),
+        date: fmtWhen(ts),
+        cost: Math.round(mins / 60 * rate * 100) / 100,
+        duration: fmtTime(mins * 60),
+        autoStopped: rnd() < 0.68,
+        promptedStop: rnd() < 0.75
+      });
+    }
+  }
+  return out.sort(function(a, b) { return b.ts - a.ts; });
+}
+
+function fmtWhen(d) {
+  var today = new Date();
+  var days = Math.round((new Date(today.getFullYear(), today.getMonth(), today.getDate()) - new Date(d.getFullYear(), d.getMonth(), d.getDate())) / 86400000);
+  var time = pad(d.getHours()) + ':' + pad(d.getMinutes());
+  if (days === 0) return 'Today, ' + time;
+  if (days === 1) return 'Yesterday, ' + time;
+  if (days < 7) return ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()] + ', ' + time;
+  return d.getDate() + ' ' + ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()] + ', ' + time;
+}
+
+S.history = seedHistory(new Date());
 
 function loc() { return LOCS[S.locationIdx]; }
 function cost() { return (S.sessionSeconds / 3600) * S.sessionRate; }
@@ -184,8 +226,7 @@ function stopSession(auto) {
   var finalApp = S.sessionApp;
   var finalZone = S.sessionZone;
   var finalLoc = loc().addr.split(',')[0];
-  S.history.unshift({ app:finalApp, zone:finalZone, date:'Just now', cost:finalCost, duration:finalDuration, autoStopped:!!auto, loc:finalLoc });
-  S.savings += parseFloat((Math.random()*0.4+0.1).toFixed(2));
+  S.history.unshift({ app:finalApp, zone:finalZone, ts:Date.now(), date:'Just now', cost:finalCost, duration:finalDuration, autoStopped:!!auto, promptedStop:!!auto, loc:finalLoc });
   S.sessionActive = false;
   S.sessionSeconds = 0;
   S.locationIdx = (S.locationIdx+1) % LOCS.length;
@@ -521,10 +562,11 @@ function renderHome() {
   h += '<div>';
   h += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">';
   h += '<span style="font-size:15px;">&#x1F4B0;</span>';
-  h += '<span style="font-size:13px;font-weight:600;color:#2d9e5a;">Saved this month</span>';
+  h += '<span style="font-size:13px;font-weight:600;color:#2d9e5a;">Caught this month</span>';
   h += '</div>';
-  h += '<div style="font-size:32px;font-weight:800;color:#2d9e5a;font-family:var(--mono);line-height:1;">'+euro(S.savings)+'</div>';
-  h += '<div style="font-size:11px;color:var(--muted);margin-top:5px;">&#x1F6D1; via auto-stop</div>';
+  var caught = S.history.filter(function(s){ return s.promptedStop && s.autoStopped && Periods.inRange(s, Periods.periodRanges('month').current); }).length;
+  h += '<div style="font-size:32px;font-weight:800;color:#2d9e5a;font-family:var(--mono);line-height:1;">'+caught+'</div>';
+  h += '<div style="font-size:11px;color:var(--muted);margin-top:5px;">&#x1F6D1; sessions you stopped after a prompt</div>';
   h += '</div>';
   // Right: bank icon in green circle
   h += '<div style="width:52px;height:52px;border-radius:16px;background:rgba(45,158,90,0.1);display:flex;align-items:center;justify-content:center;flex-shrink:0;">';
@@ -625,6 +667,11 @@ function renderApps() {
 }
 
 /* ====== RENDER HISTORY ====== */
+function setPeriod(p) {
+  S.insightsPeriod = p;
+  renderHistory();
+}
+
 function setHV(n) {
   S.historyView = n === 0 ? 'insights' : 'sessions';
   renderHistory();
@@ -651,110 +698,113 @@ function renderHistory() {
 
 function renderInsights() {
   var h = '';
-  var days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  var period = S.insightsPeriod || 'week';
+  var now = new Date();
+  var ranges = Periods.periodRanges(period, now);
+  var cur = Periods.spendByBucket(S.history, period, ranges.current);
+  var prev = Periods.spendByBucket(S.history, period, ranges.previous);
 
-  // ── Compute data ──────────────────────────────────────────────────────────
-  var thisWeek = S.history.filter(function(s){ return s.week === 'this'; });
-  var lastWeek = S.history.filter(function(s){ return s.week === 'last'; });
-
-  // Per-day spend this week
-  var dayTotals = {};
-  days.forEach(function(d){ dayTotals[d] = 0; });
-  thisWeek.forEach(function(s){ if(dayTotals[s.day]!==undefined) dayTotals[s.day] += s.cost; });
-
-  // Per-day spend last week (for comparison)
-  var lastDayTotals = {};
-  days.forEach(function(d){ lastDayTotals[d] = 0; });
-  lastWeek.forEach(function(s){ if(lastDayTotals[s.day]!==undefined) lastDayTotals[s.day] += s.cost; });
-
-  var thisTotal = thisWeek.reduce(function(a,s){ return a+s.cost; }, 0);
-  var lastTotal = lastWeek.reduce(function(a,s){ return a+s.cost; }, 0);
-  var saved = S.savings;
-  var lastSaved = parseFloat((saved * 0.72).toFixed(2));
+  var thisTotal = cur.sum;
+  var lastTotal = prev.sum;
   var diff = thisTotal - lastTotal;
-  var diffPct = lastTotal > 0 ? Math.round(Math.abs(diff/lastTotal)*100) : 0;
-  var maxDay = Math.max.apply(null, days.map(function(d){ return Math.max(dayTotals[d], lastDayTotals[d]); }));
-  if (maxDay === 0) maxDay = 1;
+  var diffPct = lastTotal > 0 ? Math.round(Math.abs(diff / lastTotal) * 100) : 0;
+  var maxBar = Math.max.apply(null, cur.totals.concat(prev.totals));
+  if (!maxBar) maxBar = 1;
 
-  // Zone frequency
+  // Zone frequency (over everything we have, not just the shown period)
   var zoneCounts = {};
-  S.history.forEach(function(s){
+  S.history.forEach(function (s) {
     var z = s.zone.split(' - ')[0];
-    zoneCounts[z] = (zoneCounts[z]||0) + 1;
+    zoneCounts[z] = (zoneCounts[z] || 0) + 1;
   });
-  var sortedZones = Object.keys(zoneCounts).sort(function(a,b){ return zoneCounts[b]-zoneCounts[a]; });
+  var sortedZones = Object.keys(zoneCounts).sort(function (a, b) { return zoneCounts[b] - zoneCounts[a]; });
   var maxZone = zoneCounts[sortedZones[0]] || 1;
 
-  // Sessions auto-stopped
-  var autoCount = S.history.filter(function(s){ return s.autoStopped; }).length;
-  var autoRate = S.history.length > 0 ? Math.round(autoCount/S.history.length*100) : 0;
+  var autoCount = S.history.filter(function (s) { return s.autoStopped; }).length;
+  var autoRate = S.history.length > 0 ? Math.round(autoCount / S.history.length * 100) : 0;
 
-  // ── Weekly spend chart ────────────────────────────────────────────────────
-  h += '<div class="section-label">Weekly Spend</div>';
+  // ── Spend, week-on-week or month-on-month ─────────────────────────────────
+  h += '<div style="display:flex;align-items:center;justify-content:space-between;margin:20px 0 8px;">';
+  h += '<div class="section-label" style="margin:0;">Spend</div>';
+  h += '<div class="seg">';
+  h += '<div class="seg-opt ' + (period === 'week' ? 'act' : '') + '" onclick="setPeriod(\'week\')">Week</div>';
+  h += '<div class="seg-opt ' + (period === 'month' ? 'act' : '') + '" onclick="setPeriod(\'month\')">Month</div>';
+  h += '</div></div>';
+
   h += '<div class="card">';
   h += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">';
   h += '<div>';
-  h += '<div style="font-size:11px;color:var(--muted);margin-bottom:2px;">This week</div>';
-  h += '<div style="font-size:24px;font-weight:800;font-family:var(--mono);color:var(--text);">'+euro(thisTotal)+'</div>';
+  h += '<div style="font-size:11px;color:var(--muted);margin-bottom:2px;">' + ranges.currentLabel + '</div>';
+  h += '<div style="font-size:24px;font-weight:800;font-family:var(--mono);color:var(--text);">' + euro(thisTotal) + '</div>';
   h += '</div>';
   h += '<div style="text-align:right;">';
-  h += '<div style="font-size:11px;color:var(--muted);margin-bottom:4px;">vs last week</div>';
+  h += '<div style="font-size:11px;color:var(--muted);margin-bottom:4px;">vs ' + ranges.previousLabel.toLowerCase() + '</div>';
   var arrow = diff > 0 ? '▲' : '▼';
   var diffColor = diff > 0 ? '#d63031' : '#2d9e5a';
   if (diff === 0) { arrow = '▶'; diffColor = 'var(--muted)'; }
-  h += '<div style="font-size:13px;font-weight:700;color:'+diffColor+';">'+arrow+' '+diffPct+'%</div>';
-  h += '<div style="font-size:11px;color:var(--muted);">'+euro(lastTotal)+' last week</div>';
+  h += '<div style="font-size:13px;font-weight:700;color:' + diffColor + ';">' + arrow + ' ' + diffPct + '%</div>';
+  h += '<div style="font-size:11px;color:var(--muted);">' + euro(lastTotal) + ' · ' + ranges.comparisonNote + '</div>';
   h += '</div></div>';
 
-  // Chart
   h += '<div class="bar-wrap">';
-  days.forEach(function(d) {
-    var thisH = maxDay > 0 ? Math.round((dayTotals[d]/maxDay)*68) : 0;
-    var lastH = maxDay > 0 ? Math.round((lastDayTotals[d]/maxDay)*68) : 0;
+  cur.labels.forEach(function (label, i) {
+    var thisH = Math.round((cur.totals[i] / maxBar) * 68);
+    var lastH = Math.round(((prev.totals[i] || 0) / maxBar) * 68);
     h += '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;">';
-    // Stacked: last week (faint) behind this week
     h += '<div style="width:100%;display:flex;align-items:flex-end;gap:2px;height:72px;">';
-    h += '<div style="flex:1;background:var(--border);border-radius:5px 5px 0 0;height:'+(lastH||3)+'px;min-height:3px;" title="Last: '+euro(lastDayTotals[d])+'"></div>';
-    h += '<div class="bar '+(dayTotals[d]>0?'hi':'lo')+'" style="flex:1;height:'+(thisH||3)+'px;" title="This: '+euro(dayTotals[d])+'"></div>';
-    h += '</div>';
-    h += '</div>';
+    h += '<div style="flex:1;background:var(--border);border-radius:5px 5px 0 0;height:' + (lastH || 3) + 'px;min-height:3px;" title="' + ranges.previousLabel + ': ' + euro(prev.totals[i] || 0) + '"></div>';
+    h += '<div class="bar ' + (cur.totals[i] > 0 ? 'hi' : 'lo') + '" style="flex:1;height:' + (thisH || 3) + 'px;" title="' + ranges.currentLabel + ': ' + euro(cur.totals[i]) + '"></div>';
+    h += '</div></div>';
   });
   h += '</div>';
-  // Day labels
+
   h += '<div style="display:flex;margin-top:5px;">';
-  days.forEach(function(d) {
-    h += '<div style="flex:1;text-align:center;font-size:10px;font-weight:600;color:var(--muted);">'+d+'</div>';
+  cur.labels.forEach(function (label) {
+    h += '<div style="flex:1;text-align:center;font-size:10px;font-weight:600;color:var(--muted);">' + label + '</div>';
   });
   h += '</div>';
-  // Legend
+
   h += '<div style="display:flex;align-items:center;gap:14px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);">';
-  h += '<div style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);"><div style="width:10px;height:5px;border-radius:3px;background:var(--navy);"></div>This week</div>';
-  h += '<div style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);"><div style="width:10px;height:5px;border-radius:3px;background:var(--border);"></div>Last week</div>';
+  h += '<div style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);"><div style="width:10px;height:5px;border-radius:3px;background:var(--navy);"></div>' + ranges.currentLabel + '</div>';
+  h += '<div style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);"><div style="width:10px;height:5px;border-radius:3px;background:var(--border);"></div>' + ranges.previousLabel + '</div>';
   h += '</div>';
   h += '</div>';
 
-  // ── This vs last month savings ─────────────────────────────────────────────
-  h += '<div class="section-label">Savings</div>';
+  // ── Prompt response ───────────────────────────────────────────────────────
+  // Deliberately not a euro figure. The app only prompts — it never stops a
+  // session itself — so any "saved" amount would be the cost of a stop that
+  // never happened, and nothing here knows when the driver would otherwise
+  // have noticed. These are the two things the app does know.
+  var curSessions = S.history.filter(function (s) { return Periods.inRange(s, ranges.current); });
+  var prevSessions = S.history.filter(function (s) { return Periods.inRange(s, ranges.previous); });
+  var answered = function (list) { return list.filter(function (s) { return s.promptedStop && s.autoStopped; }).length; };
+  var prompted = function (list) { return list.filter(function (s) { return s.promptedStop; }).length; };
+
+  var curAnswered = answered(curSessions);
+  var curPrompted = prompted(curSessions);
+  var prevAnswered = answered(prevSessions);
+  var curRate = curPrompted ? Math.round(curAnswered / curPrompted * 100) : null;
+
+  h += '<div class="section-label">Prompts you acted on</div>';
   h += '<div class="card">';
   h += '<div style="display:flex;gap:8px;">';
   h += '<div class="ins-stat">';
-  h += '<div style="font-size:11px;color:var(--muted);margin-bottom:4px;">This month</div>';
-  h += '<div class="ins-big">'+euro(saved)+'</div>';
-  h += '<div style="font-size:11px;color:var(--muted);margin-top:3px;">auto-stopped</div>';
+  h += '<div style="font-size:11px;color:var(--muted);margin-bottom:4px;">' + ranges.currentLabel + '</div>';
+  h += '<div class="ins-big">' + curAnswered + '</div>';
+  h += '<div style="font-size:11px;color:var(--muted);margin-top:3px;">of ' + curPrompted + ' prompts</div>';
   h += '</div>';
   h += '<div class="ins-stat">';
-  h += '<div style="font-size:11px;color:var(--muted);margin-bottom:4px;">Last month</div>';
-  h += '<div class="ins-big" style="color:var(--muted);">'+euro(lastSaved)+'</div>';
-  h += '<div style="font-size:11px;color:var(--muted);margin-top:3px;">auto-stopped</div>';
+  h += '<div style="font-size:11px;color:var(--muted);margin-bottom:4px;">' + ranges.previousLabel + '</div>';
+  h += '<div class="ins-big" style="color:var(--muted);">' + prevAnswered + '</div>';
+  h += '<div style="font-size:11px;color:var(--muted);margin-top:3px;">of ' + prompted(prevSessions) + ' prompts</div>';
   h += '</div>';
   h += '</div>';
-  var savingsDiff = saved - lastSaved;
-  var savingsPct = lastSaved > 0 ? Math.round(Math.abs(savingsDiff/lastSaved)*100) : 0;
-  var savingsArrow = savingsDiff >= 0 ? '▲' : '▼';
-  var savingsColor = savingsDiff >= 0 ? '#2d9e5a' : '#d63031';
-  h += '<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);display:flex;align-items:center;gap:6px;">';
-  h += '<span style="font-size:13px;font-weight:700;color:'+savingsColor+';">'+savingsArrow+' '+savingsPct+'% more saved</span>';
-  h += '<span style="font-size:11px;color:var(--muted);">vs last month</span>';
+  h += '<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);font-size:11px;color:var(--muted);line-height:1.5;">';
+  if (curRate === null) {
+    h += 'No stop prompts this ' + ranges.label + ' yet.';
+  } else {
+    h += 'You stopped ' + curRate + '% of the sessions we flagged. Each one is parking time you would otherwise still be paying for — we cannot say how much, because we do not know when you would have noticed.';
+  }
   h += '</div>';
   h += '</div>';
 
@@ -1316,5 +1366,5 @@ function finishOB() {
 }
 
 /* ====== exported to window: the markup uses inline on* handlers ====== */
-Object.assign(window, { S: S, LOCS: LOCS, loc, cost, fmtTime, fmtFull, pad, euro, allApps, toggleDark, toggleDev, showTab, startTick, updateDevState, updateDisplay, showBanner, dismissBanner, isExempt, startSession, stopSession, setSpeed, updateDwellStatus, runQuickTest, updateZones, showLock, hideLock, lockStopTap, lockStopCancel, renderLockButtons, updateLockClock, openMap, closeMap, changeLocation, openSheet, closeSheet, confirmSheet, addCustomApp, addExemption, toggleExemption, removeExemption, renderSessionCard, renderHome, renderDevTools, resetDevState, renderApps, setHV, renderHistory, renderInsights, renderSessions, renderSettings, showOnboarding, renderOB, showAddCustomAppInOB, addCustomAppOB, tgHome, tgWork, addExFromOB, finishOB });
+Object.assign(window, { S: S, LOCS: LOCS, seedHistory, fmtWhen, loc, cost, fmtTime, fmtFull, pad, euro, allApps, toggleDark, toggleDev, showTab, startTick, updateDevState, updateDisplay, showBanner, dismissBanner, isExempt, startSession, stopSession, setSpeed, updateDwellStatus, runQuickTest, updateZones, showLock, hideLock, lockStopTap, lockStopCancel, renderLockButtons, updateLockClock, openMap, closeMap, changeLocation, openSheet, closeSheet, confirmSheet, addCustomApp, addExemption, toggleExemption, removeExemption, renderSessionCard, renderHome, renderDevTools, resetDevState, renderApps, setPeriod, setHV, renderHistory, renderInsights, renderSessions, renderSettings, showOnboarding, renderOB, showAddCustomAppInOB, addCustomAppOB, tgHome, tgWork, addExFromOB, finishOB });
 export { S, LOCS, renderHome, renderSettings, showBanner, dismissBanner, startSession, stopSession, updateDwellStatus, showOnboarding };
