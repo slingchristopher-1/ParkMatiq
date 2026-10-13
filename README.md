@@ -1,103 +1,130 @@
 # ParkMatiq
 
-Parking on autopilot. One codebase, two brands, and the same build feeds the web
-app, Android and iOS.
+Slim parkeren — a Dutch parking-session PWA. Start and stop a parking session,
+see an honest per-minute cost, keep your history, and download a receipt.
 
-Based on the `parkguard_v12` prototype, with the start/stop timing replaced by
-the shared autopilot engine.
+Stack: React 18 + Vite 5, react-leaflet (CARTO Voyager tiles), jsPDF, PWA via
+`vite-plugin-pwa`, Supabase for auth and cross-device sync. State persists in
+`localStorage` first and mirrors to the server in the background. Fonts are
+bundled (`@fontsource`), not hotlinked from Google. Wrapped for Android/iOS with
+Capacitor.
 
-## The rule the app is built around
-
-Ignoring your phone is never the expensive option:
-
-| | prompt 1 | prompt 2 | no answer |
-| --- | --- | --- | --- |
-| **Start** | "Parking detected" | "Last reminder" | **nothing happens** — you can't be charged by accident |
-| **Stop** | "You drove off" | "Last reminder" | **session keeps running** — you can't be fined by accident |
-
-That asymmetry lives in `src/core/autopilot.js` and is covered by `npm test`.
-
-## Where to make a change
-
-**General change — both brands, both platforms get it.** Everything outside
-`brands/`:
-
-```
-src/core/     autopilot engine, session logic   ← the shared rules
-src/ui/       screens, styles, the bridge       ← the shared interface
-index.html    markup
-```
-
-**Brand-specific change — only that brand.** Everything inside `brands/<id>/`:
-
-```
-brands/parkmatiq/brand.json    name, appId, colours, copy, language
-brands/parkmatiq/icons/        icon-192 / icon-512 / icon-512-maskable / apple-touch-icon
-```
-
-Nothing in `src/` names a brand. `scripts/sync-brand.mjs` reads the chosen
-`brand.json` and writes `src/brand/active.json`, `capacitor.config.json` and the
-icons into `public/` before every build — so a general change physically cannot
-miss a brand, and `npm run build:all` proves it by building all of them.
-
-Adding a third brand is a new folder under `brands/` and nothing else.
-
-## Parking zones
-
-Tariffs come from the RDW open data portal (`opendata.rdw.nl`) — open licence,
-no key, no per-request cost. `scripts/build-zones.mjs` downloads and joins the
-six datasets into a single bundled snapshot; the app never calls RDW at runtime.
-
-```bash
-npm run zones    # refresh src/data/nl-parking-zones.geojson
-```
-
-A zone is not one price. It carries a weekly schedule of
-`[weekday, startMinute, endMinute, eurPerHour]` windows, so an evening or Sunday
-stay prices at zero instead of at the weekday rate. Zones whose tariff cannot be
-resolved are kept with `sched: null` and read as **tariff unknown** — never as
-free parking, which would be a fine waiting to happen.
-
-Current snapshot: 3032 zones, 2338 priced, across 114 municipalities.
-
-## Commands
+## Develop
 
 ```bash
 npm install
-npm run dev                 # ParkMatiq by default
-BRAND=parkguard npm run dev # the other brand
-npm test                    # the autopilot rules
-npm run build               # → dist/
-npm run build:all           # → dist-parkmatiq/, dist-parkguard/
+npm run dev        # http://localhost:5173
+npm run build      # production build to dist/
+npm run preview    # serve the built app
 ```
 
-## On your phone
+## Project structure
 
-**As a web app (no store, updates on push):** the Pages workflow publishes
-`dist/` on every push to `main`.
+The codebase is organised **by feature**, not by screen type. Each feature owns
+its own pages, components, and hooks; anything shared sits in the top-level
+`components/`, `hooks/`, and `utils/` folders; and every side effect (storage,
+geolocation, notifications, tariffs, receipts) goes through a **service layer**.
 
-> **https://slingchristopher-1.github.io/ParkMatiq/**
+```text
+src/
+├─ app/          App shell, providers, and router (route definitions)
+├─ components/   Shared UI — common/ (buttons, badges, icons) and layout/ (nav)
+├─ features/     One folder per feature, each with pages/ (+ components/, hooks/)
+│  ├─ auth/            Login, Register
+│  ├─ onboarding/      Onboarding
+│  ├─ parking-session/ Home, ActiveSession, drive-detection hook
+│  ├─ parking-history/ History
+│  ├─ parking-zones/   Zone overlay component
+│  ├─ receipts/        Summary
+│  └─ settings/        Settings
+├─ services/     Side-effect boundaries: storage, geolocation, notifications,
+│                tariffs, receipts (features import these, never the utils)
+├─ utils/        Pure helpers (plate, theme, map, zones, drive-detect) and the
+│                current service implementations they delegate to
+├─ data/         Bundled static data (parking-zones GeoJSON)
+└─ styles/       Global CSS
+```
 
-- **iPhone** — open that link in **Safari** (not Chrome; only Safari can install
-  a home-screen app on iOS), tap **Share** → **Add to Home Screen**. It then
-  launches fullscreen with its own icon and updates itself on next launch.
-- **Android** — open it in Chrome, menu → **Add to Home screen**.
+### Service layer
 
-Allow location when asked, or the autopilot has nothing to watch.
+Features never touch a browser API or a data source directly — they import from
+`src/services/*`. Each service is a thin boundary that currently delegates to the
+existing utility (e.g. `services/storage` → `utils/storage`). To swap an
+implementation (a `localStorageAdapter` for a `supabaseAdapter` or `apiAdapter`),
+you change only the service module; no feature code changes.
 
-**As a native app (needed for background start/stop):** the web build is wrapped
-by Capacitor. Both platforms are driven from the same `dist/`, so a general
-change reaches them together.
+## Parking tariffs
+
+`scripts/build-zones.py` turns the RDW open-data parking sets into
+`src/data/nl-parking-zones.geojson`. A zone is not one price: it points at a
+**weekly schedule** of `[weekday, startMinute, endMinute, €/hour]` windows
+(shared in a top-level `schedules` map), plus a `dayCap` where the municipality
+publishes a dagtarief. Outside every window parking is free, which is why an
+evening or Sunday stay costs nothing.
+
+Zones whose tariff cannot be resolved from RDW ship with `sched: null` and are
+shown as "tarief onbekend" — never as free. Dropping them used to make whole
+municipalities (Maastricht, Gouda, …) look like free parking.
+
+`src/utils/tariff.js` is the only place that turns this into money:
+`rateAt`, `costBetween` (bills only minutes inside paid windows, capped per
+day), `paidUntil`/`nextPaidStart` for the UI. A session stores the windows and
+cap it started under, so a later data refresh can't reprice it.
+
+## Data & backend seam
+
+**All persistence goes through a single boundary: [`src/services/storage/index.js`](src/services/storage/index.js),**
+which today delegates to [`src/utils/storage.js`](src/utils/storage.js). No screen
+reads or writes `localStorage` directly. This is the integration seam: to move to
+a real backend (e.g. Supabase), reimplement the storage functions
+(`getProfile`/`saveProfile`, `getSessions`/`addSession`,
+`getActiveSession`/`setActiveSession`, `getSettings`/`saveSettings`,
+`clearAllData`) behind that boundary. When those calls become network calls they
+turn async, so the handful of call sites (Home, ActiveSession, History,
+Settings, Onboarding) will need `await`; nothing else changes.
+
+**Auth and sync are live** when `VITE_BACKEND=supabase`: real email/password
+sign-up, sign-in, password reset and account deletion run against Supabase, and
+`services/backend/sync.js` mirrors every mutation to the server so a second
+device sees the same history. Without the env var the app runs fully local, and
+"Doorgaan zonder account" keeps that path open even when the backend is on.
+
+What still needs a provider to go live:
+
+- **Payment** — the onboarding "Betaalmethode" row is a demo placeholder. Real
+  billing in NL requires a licensed parking provider / national register.
+- **Live tariffs** — parking zones are bundled statically
+  (`src/data/nl-parking-zones.geojson`, refresh via `scripts/build-zones.py`).
+  Point `src/utils/zones.js` at a live feed when ready.
+- **Live charge-point availability** — the EV layer (Open Charge Map, needs
+  `VITE_OCM_KEY`) shows locations and connectors only; OCM has no occupancy
+  data. Live status means NDW's DOT-NL (OCPI 2.2.1, free but registered) behind
+  a proxy that holds the credentials.
+- **Background auto start/stop** — impossible in a web PWA; needs the native
+  wrapper below plus a Capacitor background-geolocation plugin.
+
+Config for a backend goes in a `.env` (Vite exposes `VITE_`-prefixed vars only);
+see `.env.example`. Never commit real keys.
+
+## Native (Android / iOS)
+
+The web build is wrapped with [Capacitor](https://capacitorjs.com). Routing uses
+`HashRouter`, which works from the `file://` origin a native shell serves.
+Native geolocation and notifications plugins are installed
+(`@capacitor/geolocation`, `@capacitor/local-notifications`).
+
+One-time, per platform (needs Android Studio / Xcode installed locally):
 
 ```bash
-npm run android:add    # once — needs Android Studio
-npm run ios:add        # once — needs Xcode, so macOS only
-npm run native:sync    # after any change — rebuilds every brand and pushes it into all their native shells
-npm run android:open   # build, sync, open Android Studio
-npm run ios:open       # build, sync, open Xcode
+npm run cap:add:android     # scaffolds android/ project
+npm run cap:add:ios         # scaffolds ios/ project (macOS only)
 ```
 
-A browser gives the app no location once it is closed, which is why the
-autopilot only runs while the app is open on the web build. Background operation
-needs the native wrapper plus a background-geolocation plugin —
-`@capacitor/geolocation` is foreground-only.
+Then to build/run after any web change:
+
+```bash
+npm run cap:android         # build web, sync, open Android Studio
+npm run cap:ios             # build web, sync, open Xcode
+```
+
+App metadata lives in [`capacitor.config.json`](capacitor.config.json).

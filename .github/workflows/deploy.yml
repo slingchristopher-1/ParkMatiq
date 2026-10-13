@@ -4,12 +4,6 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
-    inputs:
-      brand:
-        description: Brand to publish
-        default: parkmatiq
-        type: choice
-        options: [parkmatiq, parkguard]
 
 permissions:
   contents: read
@@ -28,25 +22,33 @@ jobs:
       url: ${{ steps.deploy.outputs.page_url }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
 
-      - run: npm ci
+      - name: Install dependencies
+        run: npm ci
 
-      # The core is shared, so this guards every brand at once.
-      - run: npm test
-
-      - run: npm run build
+      # Supabase config comes from repo Actions variables (Settings -> Secrets
+      # and variables -> Actions -> Variables). The publishable key is safe to
+      # expose — it ships in the client bundle by design; RLS guards the data.
+      # Rollback to local-only: clear VITE_BACKEND and re-run the workflow.
+      - name: Build
+        run: npm run build
         env:
-          BRAND: ${{ inputs.brand || 'parkmatiq' }}
+          VITE_BACKEND: ${{ vars.VITE_BACKEND }}
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+          # Open Charge Map key for the EV layer. Also a variable, not a secret:
+          # it ships in the bundle and is read-only. Clear it to hide the layer.
+          VITE_OCM_KEY: ${{ vars.VITE_OCM_KEY }}
 
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: dist
 
-      - uses: actions/deploy-pages@v4
+      - uses: actions/deploy-pages@v5
         id: deploy
