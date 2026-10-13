@@ -134,6 +134,21 @@ export default function Insights({ sessions }) {
       {alternatives.length > 0 && (
         <>
           <span className="insight-title">Waar je had kunnen parkeren</span>
+
+          <div className="saved-card">
+            <div className="saved-info">
+              <span className="saved-label">Had je kunnen besparen · {ranges.currentLabel.toLowerCase()}</span>
+              <span className="saved-amount">{formatEuro(totalDifference(alternatives))}</span>
+              <span className="saved-sub">
+                dezelfde uren in de goedkopere zone ernaast · {alternatives.length} zone
+                {alternatives.length === 1 ? '' : 's'}
+              </span>
+            </div>
+            <div className="saved-icon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 17l6-6 4 4 7-7"/><path d="M17 8h4v4"/></svg>
+            </div>
+          </div>
+
           <div className="insight-card">
             <div className="alt-head">
               <span>Zone → goedkopere buurzone</span>
@@ -155,8 +170,9 @@ export default function Insights({ sessions }) {
               </div>
             ))}
             <div className="insight-total">
-              <span className="insight-sub">Totaal · schatting op dezelfde uren</span>
-              <span className="alt-saved big">{formatEuro(totalDifference(alternatives))}</span>
+              <span className="insight-sub">
+                Schatting: dezelfde uren, ander tarief. Buurzones kunnen andere betaalde tijden hebben.
+              </span>
             </div>
           </div>
         </>

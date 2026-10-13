@@ -2211,3 +2211,34 @@ html[data-theme='dark'] .prompt-pct { color: var(--yellow); }
 .prompt-delta.down { color: var(--red); }
 
 .lag-line { font-size: 13px; line-height: 1.6; margin: 0 0 6px; }
+
+/* Headline figure for "Waar je had kunnen parkeren". Deliberately the only
+   green number on the screen: it is the one thing the driver can act on. */
+.saved-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--surface);
+  border: 1.5px solid rgba(45, 158, 90, 0.25);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  margin-bottom: 12px;
+}
+.saved-label { display: block; font-size: 12px; font-weight: 600; color: var(--green); margin-bottom: 6px; }
+.saved-amount {
+  display: block;
+  font-family: var(--mono);
+  font-size: 30px;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--green);
+}
+.saved-sub { display: block; font-size: 11px; color: var(--text-muted); margin-top: 6px; }
+.saved-icon {
+  width: 50px; height: 50px; flex: none;
+  border-radius: 15px;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(45, 158, 90, 0.1);
+  color: var(--green);
+}
