@@ -1,0 +1,11 @@
+{
+  "appId": "app.parkmatiq.mobile",
+  "appName": "ParkMatiq",
+  "webDir": "dist",
+  "backgroundColor": "#002D72",
+  "plugins": {
+    "Geolocation": {
+      "permissions": ["location"]
+    }
+  }
+}

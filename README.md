@@ -6,8 +6,9 @@ see an honest per-minute cost, keep your history, and download a receipt.
 Stack: React 18 + Vite 5, react-leaflet (CARTO Voyager tiles), jsPDF, PWA via
 `vite-plugin-pwa`, Supabase for auth and cross-device sync. State persists in
 `localStorage` first and mirrors to the server in the background. Fonts are
-bundled (`@fontsource`), not hotlinked from Google. Wrapped for Android/iOS with
-Capacitor.
+bundled (`@fontsource`), not hotlinked from Google. Set up for an Android/iOS
+wrapper with Capacitor — see [Native](#native-android--ios); the native projects
+have not been generated yet.
 
 ## Develop
 
@@ -108,10 +109,12 @@ see `.env.example`. Never commit real keys.
 
 ## Native (Android / iOS)
 
-The web build is wrapped with [Capacitor](https://capacitorjs.com). Routing uses
-`HashRouter`, which works from the `file://` origin a native shell serves.
-Native geolocation and notifications plugins are installed
-(`@capacitor/geolocation`, `@capacitor/local-notifications`).
+**There is no native build yet.** The web app is prepared for one with
+[Capacitor](https://capacitorjs.com) — the dependencies and the scripts below
+are in place, routing uses `HashRouter` (which works from the `file://` origin a
+native shell serves), and the geolocation and notification plugins are installed
+(`@capacitor/geolocation`, `@capacitor/local-notifications`). What has not been
+run is `cap add`, so neither `android/` nor `ios/` exists.
 
 One-time, per platform (needs Android Studio / Xcode installed locally):
 
