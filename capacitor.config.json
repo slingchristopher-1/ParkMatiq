@@ -1,5 +1,5 @@
 {
-  "appId": "app.parkmatiq.mobile",
+  "appId": "io.github.slingchristopher1.parkmatiq",
   "appName": "ParkMatiq",
   "webDir": "dist",
   "backgroundColor": "#002D72",
