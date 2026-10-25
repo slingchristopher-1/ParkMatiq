@@ -26,14 +26,21 @@ export function onStopPrompt(fn) {
 // (rateForSession's 'unknown' + nearZone), GPS drift is the likelier story than
 // free parking — so we also offer the nearby zones to pick from. A fix inside a
 // zone (paid, permit or out of hours) or clear of every zone needs no correction.
-async function promptStart(lat, lon, accuracy) {
+async function promptStart(lat, lon, accuracy, { reminder = false } = {}) {
   const t = await rateForSession(lat, lon, getSettings().permitZones, { accuracy })
   const zones = t.nearZone ? await nearbyZones(lat, lon) : []
+  // The reminder says what happens if it is ignored too, because that is the
+  // reassurance: nothing. Silence never opens a session.
+  const title = reminder ? 'Laatste herinnering' : 'Sessie starten?'
   if (zones.length) {
     zonePromptListeners.forEach(fn => fn({ pos: [lat, lon], zones }))
-    notify('Sessie starten?', 'Je locatie valt net buiten een parkeerzone — kies je zone in ParkMatiq.', '#/')
+    notify(title, reminder
+      ? 'Nog geen sessie gestart. Kies je zone in ParkMatiq, of laat het — dan start er niets.'
+      : 'Je locatie valt net buiten een parkeerzone — kies je zone in ParkMatiq.', '#/')
   } else {
-    notify('Sessie starten?', 'Je lijkt geparkeerd — tik om je parkeersessie te starten.', '#/')
+    notify(title, reminder
+      ? 'Nog geen sessie gestart. Tik om alsnog te starten, of laat het — dan start er niets.'
+      : 'Je lijkt geparkeerd — tik om je parkeersessie te starten.', '#/')
   }
 }
 
@@ -43,9 +50,15 @@ async function promptStart(lat, lon, accuracy) {
 // closed — that needs a native wrapper later.
 export default function useDriveDetection() {
   const stateRef = useRef(null)
+  const startReminderRef = useRef(null)
 
   useEffect(() => {
     if (!getSettings().location || !navigator.geolocation) return
+
+    const clearStartReminder = () => {
+      clearTimeout(startReminderRef.current)
+      startReminderRef.current = null
+    }
 
     stateRef.current = initialDetectorState(Date.now())
     requestPermission() // ensure we can show the prompts
@@ -54,18 +67,35 @@ export default function useDriveDetection() {
       pos => {
         // Read per sample so a change in Settings applies without a restart.
         const T = { ...THRESHOLDS, stopConfirmMs: stopConfirmMs(getSettings().endPreference) }
+        const now = Date.now()
+        const active = !!getActiveSession()
         const { state, prompt } = step(stateRef.current, {
           speed: pos.coords.speed,
           lat: pos.coords.latitude,
           lon: pos.coords.longitude,
           accuracy: pos.coords.accuracy ?? null,
-          time: Date.now(),
-          active: !!getActiveSession(),
+          time: now,
+          active,
         }, T)
         stateRef.current = state
 
+        // A session was started, or the car moved off before either prompt was
+        // answered. Either way there is nothing left to remind anyone about.
+        if (startReminderRef.current && (active || state.lastMovingAt === now)) {
+          clearStartReminder()
+        }
+
         if (prompt === 'start') {
-          promptStart(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy ?? null)
+          const { latitude, longitude, accuracy } = pos.coords
+          promptStart(latitude, longitude, accuracy ?? null)
+          // Ask once more, then let it go. Two prompts and no answer means no
+          // session — the driver is never charged for ignoring their phone.
+          clearStartReminder()
+          startReminderRef.current = setTimeout(() => {
+            startReminderRef.current = null
+            if (getActiveSession()) return
+            promptStart(latitude, longitude, accuracy ?? null, { reminder: true })
+          }, T.startRepromptMs)
         } else if (prompt === 'stop') {
           notify('Sessie stoppen?', 'Je rijdt weer — tik om je parkeersessie te stoppen.', '#/session')
           const decline = () => { stateRef.current = declineStop(stateRef.current, Date.now(), T) }
@@ -77,6 +107,9 @@ export default function useDriveDetection() {
       { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 }
     )
 
-    return () => navigator.geolocation.clearWatch(id)
+    return () => {
+      navigator.geolocation.clearWatch(id)
+      clearStartReminder()
+    }
   }, [])
 }

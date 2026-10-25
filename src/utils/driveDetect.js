@@ -29,6 +29,12 @@ export const THRESHOLDS = {
   repromptMs: 120000,     // after the first no, ask again this much later
   maxDeclines: 2,         // this many no's in a row means: other transport
   quietMs: 1800000,       // then stay quiet for 30 minutes
+  // No answer to "Sessie starten?". Asked once more this much later, and then
+  // never again for this park event — ignoring both is a valid answer, and it
+  // costs nothing, because no session is opened either way. The timer lives in
+  // the hook: a parked phone can stop producing fixes altogether, and there
+  // would be no sample left to drive a second prompt from.
+  startRepromptMs: 120000,
 }
 
 // How long to wait before suggesting a stop, per the driver's "Sessie stoppen"
