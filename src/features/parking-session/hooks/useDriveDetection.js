@@ -1,8 +1,8 @@
 import { useEffect, useRef } from 'react'
-import { getSettings, getActiveSession } from '../../../services/storage'
+import { getSettings, getActiveSession, logPrompt } from '../../../services/storage'
 import { requestPermission, notify } from '../../../services/notifications'
 import { rateForSession, nearbyZones } from '../../../services/tariffs'
-import { initialDetectorState, step, declineStop, startConfirmMs, stopConfirmMs, THRESHOLDS } from '../../../utils/driveDetect'
+import { initialDetectorState, step, declineStop, startConfirmMs, stopConfirmMs, THRESHOLDS, OVERRIDES } from '../../../utils/driveDetect'
 
 // Listeners for the in-app zone prompt (AutoStartPrompt). A notification can't
 // carry a list of zones to choose from, so the choice is made in the app.
@@ -77,6 +77,7 @@ export default function useDriveDetection() {
           // park (it resets the stop prompt); askToStart is what silences it.
           stationaryMs: startMs ?? THRESHOLDS.stationaryMs,
           askToStart: startMs != null,
+          ...OVERRIDES,
         }
         const now = Date.now()
         const active = !!getActiveSession()
@@ -99,6 +100,9 @@ export default function useDriveDetection() {
         if (prompt === 'start') {
           const { latitude, longitude, accuracy } = pos.coords
           promptStart(latitude, longitude, accuracy ?? null)
+          // One record per park event, not per notification: the reminder is
+          // the same question asked again, and startSession marks it answered.
+          logPrompt({ kind: 'start', acted: false })
           // Ask once more, then let it go. Two prompts and no answer means no
           // session — the driver is never charged for ignoring their phone.
           clearStartReminder()

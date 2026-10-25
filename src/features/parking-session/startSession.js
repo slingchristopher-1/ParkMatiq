@@ -1,4 +1,4 @@
-import { setActiveSession, getSettings, saveSettings } from '../../services/storage'
+import { setActiveSession, getSettings, saveSettings, markPromptActed } from '../../services/storage'
 import { effectiveDayCap, parseAmount } from '../../services/tariffs'
 import { notify } from '../../services/notifications'
 import { formatPlate } from '../../utils/plate'
@@ -6,6 +6,11 @@ import { purposeLabel } from '../../utils/purpose'
 
 // Starts a session from a resolved tariff `t` (rateForSession / rateForZone).
 // Shared by the Home start button and the auto-start zone prompt.
+// A start prompt counts as acted on when a session opens soon after it, however
+// the driver got there — tapping the notification, the sheet, or just opening
+// the app. Long enough to cover the second reminder at two minutes.
+const PROMPT_ACTED_WINDOW_MS = 10 * 60 * 1000
+
 export function startSession({ plate, purpose, pos, t, zonePicked = false, startedBy = 'button' }) {
   const settings = getSettings()
   saveSettings({ sessionPurpose: purpose, lastPlate: plate })
@@ -31,5 +36,6 @@ export function startSession({ plate, purpose, pos, t, zonePicked = false, start
     // acted on, which is only answerable if we write it down here.
     startedBy,
   })
+  markPromptActed('start', PROMPT_ACTED_WINDOW_MS)
   notify('Parkeren gestart', `${purposeLabel(purpose)} · Kenteken ${formatPlate(plate)}`)
 }

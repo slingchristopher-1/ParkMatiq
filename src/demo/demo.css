@@ -1,0 +1,156 @@
+/* Demo build only. Deliberately not part of the design system: this should
+   look like a tool sitting on top of the app, not a feature of it. */
+
+#demo-root {
+  position: fixed;
+  right: 12px;
+  bottom: 88px;
+  z-index: 4000;
+  font-family: system-ui, sans-serif;
+}
+
+.demo-fab {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: 2px solid #F7D117;
+  background: #0B2347;
+  color: #F7D117;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+
+.demo-panel {
+  width: min(300px, calc(100vw - 24px));
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid #1d457f;
+  background: #0B2347;
+  color: #fff;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  font-size: 13px;
+}
+
+.demo-row {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.demo-head {
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 0;
+  margin-bottom: 10px;
+}
+
+.demo-x {
+  background: none;
+  border: 0;
+  color: #9fb3d9;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.demo-label {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  color: #cfdcf3;
+}
+
+.demo-slider {
+  width: 100%;
+  accent-color: #F7D117;
+}
+
+.demo-btn {
+  flex: 1;
+  padding: 7px 4px;
+  border-radius: 8px;
+  border: 1px solid #2a5695;
+  background: #12305A;
+  color: #fff;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.demo-btn:hover { background: #17407a; }
+.demo-danger { border-color: #8a3b3b; color: #ffb4b4; }
+
+.demo-hint,
+.demo-readout {
+  margin: 10px 0 0;
+  color: #9fb3d9;
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+.demo-readout {
+  padding-top: 8px;
+  border-top: 1px solid #1d457f;
+}
+
+.demo-check {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 10px;
+  color: #cfdcf3;
+  font-size: 12px;
+}
+
+.demo-mono {
+  font-family: ui-monospace, "DM Mono", monospace;
+}
+
+/* Notification mirror ----------------------------------------------------- */
+
+.demo-toasts {
+  position: fixed;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(380px, calc(100vw - 24px));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 4100;
+}
+
+.demo-toast {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 11px 14px;
+  border: 0;
+  border-left: 4px solid #F7D117;
+  border-radius: 12px;
+  background: rgba(10, 22, 44, 0.96);
+  color: #fff;
+  text-align: left;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+  animation: demo-toast-in 180ms ease-out;
+}
+
+.demo-toast-app {
+  font-size: 10.5px;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: #F7D117;
+}
+
+.demo-toast-body { color: #cfdcf3; font-size: 12.5px; }
+
+@keyframes demo-toast-in {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: none; }
+}

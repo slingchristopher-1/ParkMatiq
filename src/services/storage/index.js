@@ -51,3 +51,4 @@ export function saveSettings(patch) {
 // driver answered, used by the history screen, not account data worth syncing.
 export const getPrompts = local.getPrompts
 export const logPrompt = local.logPrompt
+export const markPromptActed = local.markPromptActed

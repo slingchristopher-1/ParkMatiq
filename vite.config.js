@@ -2,8 +2,11 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   base: './',
+  // The demo entry awaits its own bootstrap at the top level, so that build
+  // needs a target that allows top-level await. The app's build is untouched.
+  build: mode === 'demo' ? { target: 'esnext' } : {},
   plugins: [
     react(),
     VitePWA({
@@ -73,4 +76,4 @@ export default defineConfig({
       }
     })
   ]
-})
+}))

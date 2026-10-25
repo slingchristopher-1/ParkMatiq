@@ -144,3 +144,19 @@ export function logPrompt({ kind, acted }) {
   if (prompts.length > MAX_PROMPTS) prompts.length = MAX_PROMPTS
   localStorage.setItem(PROMPTS_KEY, JSON.stringify(prompts))
 }
+
+// A start prompt is logged the moment it is sent, because a notification that
+// is never opened leaves no other trace. Acting on it is recorded separately:
+// any session opened within the window counts, whether the driver tapped the
+// notification, the sheet, or simply opened the app and started it themselves.
+// Newest first, so the first match is the prompt still waiting for an answer.
+export function markPromptActed(kind, withinMs) {
+  const prompts = getPrompts()
+  const cutoff = Date.now() - withinMs
+  const i = prompts.findIndex(p =>
+    p.kind === kind && !p.acted && new Date(p.at).getTime() >= cutoff)
+  if (i === -1) return false
+  prompts[i] = { ...prompts[i], acted: true }
+  localStorage.setItem(PROMPTS_KEY, JSON.stringify(prompts))
+  return true
+}

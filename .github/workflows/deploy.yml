@@ -46,6 +46,17 @@ jobs:
           # it ships in the bundle and is read-only. Clear it to hide the layer.
           VITE_OCM_KEY: ${{ vars.VITE_OCM_KEY }}
 
+      # The presentation build: the same app, plus a month of seeded history
+      # and the developer panel (src/demo). Published under /demo/, so the app
+      # at the root is never the one carrying invented data.
+      - name: Build demo
+        run: npm run build:demo
+        env:
+          VITE_OCM_KEY: ${{ vars.VITE_OCM_KEY }}
+
+      - name: Place demo under /demo
+        run: cp -r dist-demo dist/demo
+
       - uses: actions/upload-pages-artifact@v5
         with:
           path: dist

@@ -107,6 +107,32 @@ What still needs a provider to go live:
 Config for a backend goes in a `.env` (Vite exposes `VITE_`-prefixed vars only);
 see `.env.example`. Never commit real keys.
 
+## Two builds
+
+| Build | Source | Command | Published at |
+| --- | --- | --- | --- |
+| App | `src/` | `npm run dev` / `npm run build` | `/` |
+| Presentation | `src/` + `src/demo/` | `npm run dev:demo` / `npm run build:demo` | `/demo/` |
+
+The presentation build is the same app with three additions, all of them in
+`src/demo/` and none of them reachable from app code:
+
+- **A month of history**, seeded into `localStorage` on first load. Real RDW
+  zones with real rates, each one chosen because it has a cheaper zone next to
+  it — otherwise the history screen's "waar je had kunnen parkeren" computes
+  nothing and the card never appears.
+- **A developer panel** (the DEV button): a speed slider that feeds the drive
+  detector ordinary position samples, so parking and driving off can be
+  demonstrated indoors. The detector is not stubbed — it still decides for
+  itself when to prompt. "Demo-tempo" shortens the waits; switch it off to show
+  the real two-minute dwell.
+- **Notifications mirrored on screen**, because `notify()` is silent unless
+  the browser has been granted permission, and a borrowed laptop rarely has.
+
+`src/main.jsx` loads it only when `VITE_DEMO` is set (`.env.demo`), so a
+normal build contains none of it — the one shared hook is `OVERRIDES` in
+`src/utils/driveDetect.js`, which is an empty object in the app.
+
 ## Native (Android / iOS)
 
 **There is no native build yet.** The web app is prepared for one with

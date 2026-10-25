@@ -41,11 +41,13 @@ export default function StopPrompt() {
   }, [left])
 
   function decline() {
+    logPrompt({ kind: 'stop', acted: false })
     prompt?.decline()
     setPrompt(null)
   }
 
   function stop() {
+    logPrompt({ kind: 'stop', acted: true })
     setPrompt(null)
     const completed = stopSession({ stoppedBy: 'prompt', promptedAt })
     if (completed) navigate('/summary', { replace: true, state: { session: completed } })

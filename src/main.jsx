@@ -31,6 +31,15 @@ L.Icon.Default.mergeOptions({
   shadowUrl:     markerShadow,
 })
 
+// Presentation build only (npm run build:demo). The import sits inside the
+// guard so a normal build never pulls src/demo into the bundle, and it is
+// awaited because the demo replaces navigator.geolocation — the drive detector
+// takes its watch on mount, and would otherwise hold the real one.
+if (import.meta.env.VITE_DEMO) {
+  const { default: bootDemo } = await import('./demo/boot')
+  bootDemo()
+}
+
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <App />

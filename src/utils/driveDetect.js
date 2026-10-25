@@ -38,6 +38,12 @@ export const THRESHOLDS = {
   askToStart: true,       // false: never raise the start prompt (driver's choice)
 }
 
+// Applied last when the detector's thresholds are assembled, so a build can
+// replace any of them wholesale. Empty in the app — only the demo build
+// (src/demo) fills it, to compress two minutes of waiting into a few seconds
+// in front of an audience.
+export const OVERRIDES = {}
+
 // How long still before we ask whether to start, per the driver's "Sessie
 // starten" preference. 'manual' never asks (null). This only moves the
 // question earlier or later — nothing starts a session but a tap.
