@@ -28,6 +28,7 @@ export default function Settings() {
   const [budget, setBudget] = useState('')
   const [maxDaily, setMaxDaily] = useState('')
   const [permitZones, setPermitZones] = useState([])
+  const [startPref, setStartPref] = useState('balanced')
   const [endPref, setEndPref] = useState('balanced')
   // Alleen echt ingelogde accounts (geen gastmodus) krijgen de account-UI.
   const [signedIn, setSignedIn] = useState(false)
@@ -54,6 +55,7 @@ export default function Settings() {
     setBudget(s.monthlyBudget || '')
     setMaxDaily(s.maxDailyCost || '')
     setPermitZones(s.permitZones || [])
+    setStartPref(s.startPreference || 'balanced')
     setEndPref(s.endPreference || 'balanced')
     setDarkOn(currentTheme() === 'dark')
   }, [])
@@ -77,6 +79,11 @@ export default function Settings() {
   function handlePermitZones(next) {
     setPermitZones(next)
     saveSettings({ permitZones: next })
+  }
+
+  function handleStartPref(v) {
+    setStartPref(v)
+    saveSettings({ startPreference: v })
   }
 
   function handleEndPref(v) {
@@ -418,6 +425,36 @@ export default function Settings() {
 
           <PermitZones zones={permitZones} onChange={handlePermitZones} />
 
+          {/* Both controls move the question only. Neither starts or stops a
+              session — that is always a tap. */}
+          <div className="form-group">
+            <label>Sessie starten</label>
+            <div className="seg-control">
+              {[
+                ['balanced', 'Gebalanceerd'],
+                ['eager',    'Snel vragen'],
+                ['manual',   'Handmatig'],
+              ].map(([val, lbl]) => (
+                <button
+                  key={val}
+                  type="button"
+                  className={`seg-opt${startPref === val ? ' seg-opt-active' : ''}`}
+                  onClick={() => handleStartPref(val)}
+                >
+                  {lbl}
+                </button>
+              ))}
+            </div>
+            <span className="field-hint">
+              {{
+                balanced: 'Na twee minuten stilstaan vragen we of je een sessie wilt starten.',
+                eager:    'Al na een minuut stilstaan vragen we of je een sessie wilt starten.',
+                manual:   'We vragen het nooit; je start de sessie zelf.',
+              }[startPref]}
+              {' '}Reageer je niet, dan start er niets.
+            </span>
+          </div>
+
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label>Sessie stoppen</label>
             <div className="seg-control">
@@ -442,6 +479,7 @@ export default function Settings() {
                 eager:    'Zodra je wegrijdt vragen we of je de sessie wilt stoppen.',
                 manual:   'We vragen het nooit; je stopt de sessie zelf.',
               }[endPref]}
+              {' '}Reageer je niet, dan loopt de sessie door.
             </span>
           </div>
         </div>

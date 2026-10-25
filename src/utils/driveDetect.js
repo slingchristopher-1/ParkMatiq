@@ -35,6 +35,15 @@ export const THRESHOLDS = {
   // the hook: a parked phone can stop producing fixes altogether, and there
   // would be no sample left to drive a second prompt from.
   startRepromptMs: 120000,
+  askToStart: true,       // false: never raise the start prompt (driver's choice)
+}
+
+// How long still before we ask whether to start, per the driver's "Sessie
+// starten" preference. 'manual' never asks (null). This only moves the
+// question earlier or later — nothing starts a session but a tap.
+export function startConfirmMs(startPreference) {
+  if (startPreference === 'manual') return null
+  return startPreference === 'eager' ? 60000 : 120000
 }
 
 // How long to wait before suggesting a stop, per the driver's "Sessie stoppen"
@@ -131,7 +140,7 @@ export function step(state, sample, T = THRESHOLDS) {
     s.driveFired = false
     // A trip that ended starts a fresh count; a quiet period keeps running.
     s.declines = 0
-    if (!sample.active && !s.parkedFired) {
+    if (!sample.active && !s.parkedFired && T.askToStart !== false) {
       prompt = 'start'
       s.parkedFired = true
     }

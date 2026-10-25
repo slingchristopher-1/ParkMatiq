@@ -18,7 +18,8 @@ const DEFAULT_SETTINGS = {
   showCharging: false,    // EV charge-point layer on the Home map
   monthlyBudget: '',      // empty = no budget set
   maxDailyCost: '',       // driver's own ceiling per day; empty = no ceiling
-  endPreference: 'balanced',
+  startPreference: 'balanced', // how soon we ask to start; never starts by itself
+  endPreference: 'balanced',   // how soon we ask to stop; never stops by itself
   sessionPurpose: 'personal', // last choice on the start sheet: 'personal' | 'business'
   vehicles: [],           // [{ plate, label }] — see utils/vehicles.js
   lastPlate: null,        // vehicle preselected on the start sheet

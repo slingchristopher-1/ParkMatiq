@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { getProfile, getSettings, saveSettings } from '../../../services/storage'
 import { requestPermission } from '../../../services/notifications'
 
-const STEPS = 6
+const STEPS = 7
 
 // Inline icons (stroke style, no emoji) ------------------------------------
 const Ic = ({ d, size = 18 }) => (
@@ -27,6 +27,7 @@ export default function Onboarding() {
   const [permitOn, setPermitOn]     = useState(false)
   const [budgetOn, setBudgetOn]     = useState(false)
   const [budget, setBudget]         = useState('')
+  const [startPref, setStartPref]   = useState('balanced')
   const [endPref, setEndPref]       = useState('balanced')
 
   if (!getProfile()) { navigate('/login', { replace: true }); return null }
@@ -54,6 +55,7 @@ export default function Onboarding() {
       // to a parking zone, which we can only match against the RDW zone data.
       permitZones: [],
       monthlyBudget: budgetOn ? budget.trim() : '',
+      startPreference: startPref,
       endPreference: endPref,
     })
     navigate('/', { replace: true })
@@ -85,7 +87,7 @@ export default function Onboarding() {
               </div>
             </div>
             <h1 className="ob-title">Parkeren dat oplet, zodat jij dat niet hoeft.</h1>
-            <p className="ob-text">ParkMatiq merkt wanneer je parkeert, start de meter voor je en stopt zodra je wegrijdt — je betaalt alleen de minuten die je echt gebruikt.</p>
+            <p className="ob-text">ParkMatiq merkt wanneer je parkeert en wanneer je wegrijdt, en vraagt het je — twee keer, en één tik is genoeg. Starten en stoppen doe jij, zodat je nooit betaalt voor een sessie die je niet wilde.</p>
           </>
         )}
 
@@ -141,17 +143,29 @@ export default function Onboarding() {
           </>
         )}
 
+        {/* Two questions, same shape, and both about timing only. Neither
+            setting can open or close a session: that always takes a tap. */}
         {step === 4 && (
           <>
-            <h1 className="ob-title">Wanneer stoppen we sessies?</h1>
-            <p className="ob-text">ParkMatiq vraagt altijd voor het stoppen — dit bepaalt hoe snel het dat voorstelt.</p>
-            <RadioOpt sel={endPref === 'balanced'} onPick={() => setEndPref('balanced')} title="Gebalanceerd" sub="Bevestig na wegrijden, korte wachttijd" />
-            <RadioOpt sel={endPref === 'eager'} onPick={() => setEndPref('eager')} title="Elke cent sparen" sub="Stel stoppen voor zodra ik vertrek" />
-            <RadioOpt sel={endPref === 'manual'} onPick={() => setEndPref('manual')} title="Nooit automatisch" sub="Alleen stoppen als ik er zelf op tik" />
+            <h1 className="ob-title">Wanneer vragen we of je wilt starten?</h1>
+            <p className="ob-text">ParkMatiq start nooit uit zichzelf. Dit bepaalt alleen hoe snel we het vragen nadat je bent gestopt met rijden.</p>
+            <RadioOpt sel={startPref === 'balanced'} onPick={() => setStartPref('balanced')} title="Gebalanceerd" sub="Vraag na twee minuten stilstaan" />
+            <RadioOpt sel={startPref === 'eager'} onPick={() => setStartPref('eager')} title="Snel vragen" sub="Vraag al na één minuut stilstaan" />
+            <RadioOpt sel={startPref === 'manual'} onPick={() => setStartPref('manual')} title="Nooit vragen" sub="Ik start de sessie zelf" />
           </>
         )}
 
         {step === 5 && (
+          <>
+            <h1 className="ob-title">Wanneer vragen we of je wilt stoppen?</h1>
+            <p className="ob-text">ParkMatiq stopt nooit uit zichzelf. Reageer je niet, dan loopt de sessie door — dat voorkomt een naheffing.</p>
+            <RadioOpt sel={endPref === 'balanced'} onPick={() => setEndPref('balanced')} title="Gebalanceerd" sub="Vraag na een minuut rijden" />
+            <RadioOpt sel={endPref === 'eager'} onPick={() => setEndPref('eager')} title="Elke cent sparen" sub="Vraag zodra ik wegrijd" />
+            <RadioOpt sel={endPref === 'manual'} onPick={() => setEndPref('manual')} title="Nooit vragen" sub="Ik stop de sessie zelf" />
+          </>
+        )}
+
+        {step === 6 && (
           <>
             <div className="ob-hero">
               <div className="ob-done-badge">
@@ -159,14 +173,19 @@ export default function Onboarding() {
               </div>
             </div>
             <h1 className="ob-title">Je bent klaar.</h1>
-            <p className="ob-text">Parkeer ergens in een ParkMatiq-stad en wij nemen het over. Dit is jouw instelling:</p>
+            <p className="ob-text">Parkeer ergens in een ParkMatiq-stad. Wij zien het en vragen het je — beslissen doe jij. Dit is jouw instelling:</p>
             <div className="card" style={{ marginBottom: 0 }}>
-              <SummaryItem on={locationOn} text="Automatisch parkeren detecteren" offText="Automatisch detecteren (locatie uit)" />
+              <SummaryItem on={locationOn} text="Parkeren en wegrijden herkennen" offText="Herkennen uit (locatie uit)" />
               <SummaryItem on={notifOn} text="Verloop-herinneringen actief" offText="Verloop-herinneringen (meldingen uit)" />
               <SummaryItem
+                on={startPref !== 'manual'}
+                text={startPref === 'eager' ? 'Starten vragen na één minuut stilstaan' : 'Starten vragen na twee minuten stilstaan'}
+                offText="Zelf starten, we vragen het niet"
+              />
+              <SummaryItem
                 on={endPref !== 'manual'}
-                text={endPref === 'eager' ? 'Stoppen voorstellen zodra je wegrijdt' : 'Bevestigen voor stoppen'}
-                offText="Alleen handmatig stoppen"
+                text={endPref === 'eager' ? 'Stoppen vragen zodra je wegrijdt' : 'Stoppen vragen na een minuut rijden'}
+                offText="Zelf stoppen, we vragen het niet"
               />
             </div>
           </>

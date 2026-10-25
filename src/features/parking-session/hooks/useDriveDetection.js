@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import { getSettings, getActiveSession } from '../../../services/storage'
 import { requestPermission, notify } from '../../../services/notifications'
 import { rateForSession, nearbyZones } from '../../../services/tariffs'
-import { initialDetectorState, step, declineStop, stopConfirmMs, THRESHOLDS } from '../../../utils/driveDetect'
+import { initialDetectorState, step, declineStop, startConfirmMs, stopConfirmMs, THRESHOLDS } from '../../../utils/driveDetect'
 
 // Listeners for the in-app zone prompt (AutoStartPrompt). A notification can't
 // carry a list of zones to choose from, so the choice is made in the app.
@@ -66,7 +66,18 @@ export default function useDriveDetection() {
     const id = navigator.geolocation.watchPosition(
       pos => {
         // Read per sample so a change in Settings applies without a restart.
-        const T = { ...THRESHOLDS, stopConfirmMs: stopConfirmMs(getSettings().endPreference) }
+        // Both preferences only move the question: with 'manual' we never ask,
+        // and no setting here can open or close a session on its own.
+        const settings = getSettings()
+        const startMs = startConfirmMs(settings.startPreference)
+        const T = {
+          ...THRESHOLDS,
+          stopConfirmMs: stopConfirmMs(settings.endPreference),
+          // 'manual' keeps the default dwell so the detector still notices the
+          // park (it resets the stop prompt); askToStart is what silences it.
+          stationaryMs: startMs ?? THRESHOLDS.stationaryMs,
+          askToStart: startMs != null,
+        }
         const now = Date.now()
         const active = !!getActiveSession()
         const { state, prompt } = step(stateRef.current, {
